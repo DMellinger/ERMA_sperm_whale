@@ -164,12 +164,13 @@ end
 
 
 /* Save some detections -- namely, the first ep->nSaveDets (default 50) -- from
- * each encounter in goodDetsPath.
+ * each encounter in goodDetsPath. Also append the name of the output file to
+ * encFileListPath (wispr_dtx_list.txt).
  *
  * Need to also save an average spectrum.
  */
 void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *encDetsPath,
-		    double tMinE, double tMaxE)
+		    double tMinE, double tMaxE, char *encFileListPath)
 {
     FILE *fp = fopen(encDetsPath, "a");
     const double secPerDay = 24 * 60 * 60;
@@ -195,6 +196,13 @@ void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *encDetsPath,
 		fprintf(fp, ",%.3lf", (allC->timeD[j] - t0) * secPerDay);
 	    fprintf(fp, "\n");
 	}
+	fclose(fp);
+    }
+
+    /* Write name of that output file to encFileListPath */
+    fp = fopen(encFileListPath, "a");
+    if (fp != NULL) {
+	fprintf(fp, "%s\n", pathFile(encDetsPath));
 	fclose(fp);
     }
 }

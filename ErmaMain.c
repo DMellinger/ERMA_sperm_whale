@@ -178,27 +178,28 @@ static ENCOUNTERS enc;
 int main(int argc, char **argv)
 {
     long nFiles, i;
-    char **filesProcessedList;		/* list of files done on prev runs */
-    char **unprocessedFiles;		/* list of files to do on this run */
-    char allDetsPath[256];		/* stores all click dets */
-    char encDetsPath[256];		/* stores click dets in encounters */
-    char buf[256];			/* temp buffer for making allDetsPath */
-    char filesProcessedPath[256];	/* full path for filesProcessed */
+    char **filesProcessedList;		//list of files done on prev runs
+    char **unprocessedFiles;		//list of files to do on this run
+    char allDetsPath[256];		//stores all click dets
+    char encDetsPath[256];		//stores click dets in encounters
+    char buf[256];			//temp buffer for making allDetsPath
+    char encFileListPath[256];		//stores list of encounter output files
+    char filesProcessedPath[256];	//full path for filesProcessed
     unsigned int pinval;
 
     #if ON_RPI
     /* Set RPI_ACTIVE GPIO pin high to indicate I'm busy */
-    gpio_export(ep.gpioRPiActive);		/* make the pin accessible */
-    gpio_set_direction(ep.gpioRPiActive, 1);	/* say this pin is for output */
+    gpio_export(ep.gpioRPiActive);		//make the pin accessible
+    gpio_set_direction(ep.gpioRPiActive, 1);	//say this pin is for output
     gpio_set_value(ep.gpioRPiActive, 1);
 
     /* Wait for WISPR_ACTIVE GPIO pin to go high */
-    gpio_export(ep.gpioWisprActive);		 /* make the pin accessible */
-    gpio_set_direction(ep.gpioWisprActive, 0);/* say this pin is for input */
+    gpio_export(ep.gpioWisprActive);		 //make the pin accessible
+    gpio_set_direction(ep.gpioWisprActive, 0);//say this pin is for input
     while (1) {
 	if (!gpio_get_value(ep.gpioWisprActive, &pinval) && pinval)
 	    break;
-	sleep(1);				/* wait 1 second */
+	sleep(1);				//wait 1 second
     }
     #endif
 
@@ -236,6 +237,8 @@ int main(int argc, char **argv)
 	//encDetsPath is in baseDir, not baseDir/outDir.
 	snprintf(encDetsPath, sizeof(encDetsPath), "%s/%s-%s.csv",
 		 baseDir, ep.encDetsPrefix, fileTimestamp);
+	snprintf(encFileListPath, sizeof(encDetsPath), "%s/%s",
+		 baseDir, ep.encFileList);
 
 	/* Process the files! */
 	double tMinE = DBL_MAX, tMaxE = -DBL_MAX;
@@ -257,7 +260,7 @@ int main(int argc, char **argv)
 
 	/* Find and save encounters. */
 	findEncounters(&allC, &ep, &enc);
-	saveEncounters(&enc, &allC, encDetsPath, tMinE, tMaxE);
+	saveEncounters(&enc, &allC, encDetsPath, tMinE, tMaxE, encFileListPath);
     }
 
     /* Set the RPI_ACTIVE GPIO pin to low to indicate we're done and the RPi can

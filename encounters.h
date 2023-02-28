@@ -12,7 +12,7 @@ typedef struct {
 void initENCOUNTERS(ENCOUNTERS *enc);
 void findEncounters(ALLCLICKS *allClicks, ERMAPARAMS *ep, ENCOUNTERS *enc);
 void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *encDetsPath,
-		    double tMinE, double tMaxE);
+		    double tMinE, double tMaxE, char *encFileListPath);
 
 
 #endif /* _ENCOUNTERS_H_ */
