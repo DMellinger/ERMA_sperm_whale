@@ -1,0 +1,29 @@
+
+# This makes ErmaMain.exe, which looks for any available unprocessed
+# input files in a target directory, processes them to detect sperm
+# whales, and writes detection reports to an output directory.  It
+# keeps track of which files have been processed in a bookkeeping
+# file. See ErmaMain.c for the relevant file and directory names.
+
+
+# This makefile can make either the "stub" version of processFile,
+# which doesn't actually process data from each input file but merely
+# writes the file's name to the output file, or the real version,
+# which isn't done yet. To use the real version use processFile.o in
+# the ErmaMain line below, and to use the stub version put
+# processFileStub.o there.
+
+CFLAGS = -g
+
+ErmaMain: ErmaMain.o processFile.o wisprFile.o ermaConfig.o ermaGoodies.o \
+	gpio.o iirFilter.o
+
+ErmaMain.o:	wisprFile.h ermaConfig.h ermaGoodies.h processFile.h gpio.h
+wisprFile.o:	wisprFile.h
+ermaConfig.o:	ermaConfig.h ermaGoodies.h
+ermaGoodies.o:	ermaGoodies.h
+gpio.c:		gpio.h
+processFile.o:     processFile.h ermaConfig.h wisprFile.h ermaGoodies.h
+processFileStub.o: processFile.h ermaConfig.h wisprFile.h ermaGoodies.h
+iirFilter.o:	ermaGoodies.h iirFilter.c iirFilter.h
+	cc ${CFLAGS} -O3 -c iirFilter.c
