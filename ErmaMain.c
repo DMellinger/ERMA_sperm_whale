@@ -17,12 +17,6 @@
  */
 
 
-/* This flag says whether we're compiling this on a Raspberry Pi system.
- * (Initially the code is being developed in Windows.)
- */
-#define ON_RPI	__arm__	/* say "#if ON_RPI" to use (NOT #ifdef!!) */
-
-
 /**************************************************************************/
 /****************************** Configuration *****************************/
 /**************************************************************************/
@@ -33,12 +27,13 @@
  * name (namely <baseDir>/<configFileName>) that's read to change parameters.
  */
 #if ON_RPI
-/*    char *baseDir = "/mnt/sd0";*/
-    char *baseDir = "/media/pi/wispr_sd0";
+/*    char *baseDir = "/media/pi/wispr_sd0";*/
+    char *baseDir = "/media/cimerspi4/WISPR_SD";
 #else
-/*    char *baseDir = "C:/Dave/sounds/PacWavePerimeterData"; *//* for testing */
+/*    char *baseDir = "C:/Dave/sounds/PacWavePerimeterData"; */
 /*      char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm";*/
 char *baseDir = "C:/Dave/sounds/GoM_gliders_2017/resampledAt187kHz";
+/*char *baseDir = "C:\\Dave\\sounds\\fileFormatExamples\\WISPR\\3_byte_samples";*/
 #endif
 
 
@@ -68,11 +63,16 @@ static ERMAPARAMS ep =
      "files_processed.txt",
 
      //infilePattern: a template for files in the baseDir directory used
-     //* to find the WISPR soundfiles to process. It can have '*' wildcards in
-     //the file part of the name, but not in the directory name.
+     //* to find the WISPR soundfiles to process. It can have '*' wildcards.
      /*"PERI-1_longer_dataset/WISPR*.dat";*/ //WISPR files but no sperm whales
      /*"initialSet/sg680*.wav";*/	//sperm whales, but recorded by PMAR
-     "*.wav",
+     /*"*.wav",*/
+#if ON_RPI
+     "[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
+#else
+     //"[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
+     "[0-9][0-9][0-9][0-9][0-9][0-9]/*.wav",
+#endif
 
      //outDir: where in the outDir directory to put the detection report files
      //that are the output of this ERMA process.
@@ -85,9 +85,21 @@ static ERMAPARAMS ep =
      "det_reports_file.txt",
 
      //encFileList: whenever a detection file is created for upload to the
-     //basestation, append its name to this file. WISPR removes the name when
-     //the file is uploaded.
-     "wispr_dtx_list.txt",  
+     //basestation, append its name to encFileList, which is in baseDir. WISPR
+     //looks in encFileList to see what to upload to the Seaglider (and then
+     //presumably the basestation). WISPR removes the detection file name from
+     //encFileList when the detection file is uploaded. See also wisprBaseDir
+     //just below.
+     "wispr_dtx_list.txt",
+
+     //wisprEncFileDir: The absolute directory where detection files for upload
+     //are stored *when seen by WISPR*. This directory is baseDir when the SD
+     //card is mounted here on the RPi, but different when it's mounted on
+     //WISPR. This is used to construct the directory names for filenames
+     //written in encFileList. As a special case, the empty string means use
+     //relative pathnames from baseDir for detection file names, not absolute
+     //ones.
+     "",		//put *relative* pathnames in encFileList
 
      //allDetsPrefix: used to construct the file names for recording the times
      //of all detected clicks. This prefix gets the timestamp of the first
@@ -128,13 +140,17 @@ static ERMAPARAMS ep =
 
      /* stuff for ERMA algorithm: */
      0.25,	//decayTime: exponential-decay constant for expdecay()
-     200,	//powerThresh: detection threshold per kHz in numerator band
-     0.10,	//refractoryT: stop peaks w/in this after start of a click
+/*     200,	//powerThresh: detection threshold per kHz in numerator band*/
+     50,	//powerThresh: detection threshold per kHz in numerator band
+/*     0.10,	//refractoryT: stop peaks w/in this after start of a click*/
+     0.01,	//refractoryT: stop peaks w/in this after start of a click
      0.005,	//peakNbdT: peak is highest of anything within this time
      0.005,	//peakDurLims: peak can't last longer than this
      0.005,	//avgT: averaging time before computing ERMA ratio
-     15,	//ratioThresh: minimum ERMA ratio (this is linear, not dB)
-     50,	//ignoreThresh: sams this loud don't affect running mean
+/*     15,	//ratioThresh: minimum ERMA ratio (this is linear, not dB)*/
+     4, 	//ratioThresh: minimum ERMA ratio (this is linear, not dB)
+/*     50,	//ignoreThresh: sams this loud don't affect running mean*/
+     1e7,	//ignoreThresh: sams this loud don't affect running mean
      0.1,	//ignoreLimT: ...unless they last for this long
      
      /* stuff for testClickDets: */
@@ -146,16 +162,17 @@ static ERMAPARAMS ep =
      /* stuff for findEncounters: */
      60,	//blockLenS: length of a 'block', s
      10,	//clicksPerBlock: min clicks per block to count as a 'hit'
-     10,	//consecBlocks: number of consecutive blocks to consider
-     5,		/* hitsPerEnc: min number of block hits in the consecutive
-		 * blocks needed to count as an encounter */
+     5, 	//consecBlocks: # consecutive blocks for counting hits
+     3,		//hitsPerEnc: min number of block hits in the consecutive
+		//    blocks needed to register as an encounter */
+     1000, 	//clicksToSave: number of clicks to save per dive
      
      /* stuff for glider noise removal: */
 //    0.1,	*///ns_tBlockS: block duration for measuring noise, s
      0.01,	//ns_tBlockS: block duration for measuring noise, s
      0.3,	//ns_tConsecS: consecutive time needed to decide 'noise', s
-/*     2e4,     *///ns_thresh: noise threshold 
-     4e8,	//ns_thresh: noise threshold
+/*     2e4,     *///ns_thresh: noise threshold [Perimeter .wav files]
+     4e8,	//ns_thresh: noise threshold [glider .dat files]
      0.1,	//ns_padSec: pad noise periods w/this for ramp up/down
      0.1,	//ns_minQuietS: minimum length of a noise section
     };
@@ -177,16 +194,17 @@ static ENCOUNTERS enc;
 
 int main(int argc, char **argv)
 {
-    long nFiles, i;
     char **filesProcessedList;		//list of files done on prev runs
     char **unprocessedFiles;		//list of files to do on this run
     char allDetsPath[256];		//stores all click dets
-    char encDetsPath[256];		//stores click dets in encounters
+    char piEncDetsPath[256];		//name here of encounter clicks file
+    char wisprEncDetsPath[256];		//name on WISPR of encounter clicks file
     char buf[256];			//temp buffer for making allDetsPath
     char encFileListPath[256];		//stores list of encounter output files
     char filesProcessedPath[256];	//full path for filesProcessed
     unsigned int pinval;
 
+    printf("In main()\n");
     #if ON_RPI
     /* Set RPI_ACTIVE GPIO pin high to indicate I'm busy */
     gpio_export(ep.gpioRPiActive);		//make the pin accessible
@@ -196,9 +214,12 @@ int main(int argc, char **argv)
     /* Wait for WISPR_ACTIVE GPIO pin to go high */
     gpio_export(ep.gpioWisprActive);		 //make the pin accessible
     gpio_set_direction(ep.gpioWisprActive, 0);//say this pin is for input
+    printf("Checking wisprActive (%d) GPIO pin\n", ep.gpioWisprActive);
     while (1) {
-	if (!gpio_get_value(ep.gpioWisprActive, &pinval) && pinval)
+	if (!gpio_get_value(ep.gpioWisprActive, &pinval) && pinval) {
+	    printf("wisprActive pin is high\n");
 	    break;
+	}
 	sleep(1);				//wait 1 second
     }
     #endif
@@ -234,17 +255,23 @@ int main(int argc, char **argv)
 	char *fileTimestamp = !strncmp(buf,"WISPR_",6) ? buf+6 : buf;
 	snprintf(allDetsPath, sizeof(allDetsPath), "%s/%s/%s-%s.csv",
 		 baseDir, ep.outDir, ep.allDetsPrefix, fileTimestamp);
-	//encDetsPath is in baseDir, not baseDir/outDir.
-	snprintf(encDetsPath, sizeof(encDetsPath), "%s/%s-%s.csv",
+	//piEncDetsPath is in baseDir, not baseDir/outDir.
+	snprintf(piEncDetsPath, sizeof(piEncDetsPath), "%s/%s-%s.csv",
 		 baseDir, ep.encDetsPrefix, fileTimestamp);
-	snprintf(encFileListPath, sizeof(encDetsPath), "%s/%s",
+	char *sep = (strlen(ep.wisprEncFileDir) > 0) ? "/" : "";
+	snprintf(wisprEncDetsPath, sizeof(wisprEncDetsPath), "%s%s%s-%s.csv",
+		 ep.wisprEncFileDir, sep, ep.encDetsPrefix, fileTimestamp);
+	snprintf(encFileListPath, sizeof(encFileListPath), "%s/%s",
 		 baseDir, ep.encFileList);
 
 	/* Process the files! */
 	double tMinE = DBL_MAX, tMaxE = -DBL_MAX;
-	for (i = 0; unprocessedFiles[i] != NULL; i++) {
-/*	for (i = 0; unprocessedFiles[i] != NULL && i < 3; i++) {  *//* DEBUG */
+	int fastQuit = 0;	//used when WISPR asks us to shut down
+	for (int32 i = 0; unprocessedFiles[i] != NULL; i++) {
+/*	for (i = 0; unprocessedFiles[i] != NULL && i < 1; i++) {  *//* DEBUG */
 /*	    printf("******* DEBUG: ErmaMain doing only a few **********\n");*/
+
+	    printf("ErmaMain: processing %s\n", unprocessedFiles[i]);
 	    appendToProcessed(pathFile(unprocessedFiles[i]),filesProcessedPath);
 /*	    printf("******* DEBUG: not appending to files_processed.txt**\n");*/
 
@@ -253,22 +280,30 @@ int main(int argc, char **argv)
 
 	    /* Check to be sure that WISPR wants RPi to keep running */
 	    #if ON_RPI
-	    if (!gpio_get_value(ep.gpioWisprActive, &pinval) && pinval)
+	    if (!gpio_get_value(ep.gpioWisprActive, &pinval) && !pinval) {
+		printf("Fast quit signal on pin %d\n", ep.gpioWisprActive);
+		fastQuit = 1;
 		break;
+	    }
 	    #endif
 	}
+	printf("Done processing files.\n");
 
-	/* Find and save encounters. */
-	findEncounters(&allC, &ep, &enc);
-	saveEncounters(&enc, &allC, encDetsPath, tMinE, tMaxE, encFileListPath);
+	/* Find and save encounters. First check if WISPR needs a shutdown. */
+	if (!fastQuit) {
+	    findEncounters(&allC, &ep, &enc);
+	    saveEncounters(&enc, &allC, piEncDetsPath, wisprEncDetsPath,
+			   tMinE, tMaxE, encFileListPath, ep.clicksToSave);
+	    printf("Exiting normally.\n");
+	}
     }
 
-    /* Set the RPI_ACTIVE GPIO pin to low to indicate we're done and the RPi can
-     * be shut off.
-     */
 #if ON_RPI
-    gpio_set_value(ep.gpioRPiActive, 0);	/* set the pin low */
-/*    system("sudo shutdown now");*/		/* would this work? */
+    /* Set the RPI_ACTIVE GPIO pin to low to indicate we're done and the RPi can
+     * be shut off. */
+    printf("ErmaMain: NOT CLEARING RPiActive GPIO PIN, NOT SHUTTING DOWN\n");
+/*    gpio_set_value(ep.gpioRPiActive, 0);	*//* set the pin low */
+/*    system("sudo shutdown -h now");		*//* would this work? */
 #endif
 
     return 0;
@@ -282,7 +317,8 @@ char **readFilesProcessed(char *filename)
 {
     char **filelist, **p;
     size_t filelistSize;
-    long nFiles, lnSize;
+    int32 nFiles;
+    size_t lnSize;
     char *ln;
     FILE *fp;
 
@@ -314,40 +350,58 @@ char **readFilesProcessed(char *filename)
 
 /* Get a list of unprocessed files - those that match the pattern (template) in
  * infilePattern and aren't yet in the file list filesProcessedList. Returns a
- * new NULL-terminated list of pathnames with malloc'ed strings having the names
- * that aren't yet processed, or NULL if there's something wrong with the
+ * new NULL-terminated array of pathnames with malloc'ed strings having the
+ * names that aren't yet processed, or NULL if there's something wrong with the
  * infilePattern.
  */
-char **getNewFiles(char **filesProcessedList, char *dir,char *infilePattern)
+char **getNewFiles(char **filesProcessedList, char *dir, char *infilePattern)
 {
-    glob_t globbuf;
-    long nFiles, i;
-    char templt[256];
+    glob_t globbufDir, globbuf;
+    char templt0[256], templt1[256], templtDir[256];
 
-    snprintf(templt, sizeof(templt), "%s/%s", dir, infilePattern);
-    /* Get a list of files that match the input pattern. */
-    if (glob(templt, GLOB_NOESCAPE, NULL, &globbuf) != 0)
+    /* Make a complete template with both dir template/name and file template */
+    snprintf(templt0, sizeof(templt0), "%s/%s", dir, infilePattern);
+    
+    /* Get a list of files that match templt0, by globbing first the directory,
+     * then the files in each directory. These are separate steps because
+     * globbing both the directory name and the file name together might produce
+     * a huge list of files that's too large for glob. First glob the
+     * directory. */
+    pathDir(templtDir, templt0);
+    if (glob(templtDir, GLOB_NOESCAPE, NULL, &globbufDir) != 0)
 	return NULL;
 
-    /* Walk through that list of files. For each one, see if it's in the
-     * list of processed files, and if not, add it to the unprocessed list.
-     */
+    /* Walk through list of directories that matched the directory template. */
+    char *tfn = pathFile(templt0);	//template file name
     char **unprocessed = NULL;
     size_t unprocessedSize = 0;		//for bufgrow
-    nFiles = 0;
-    for (i = 0; 1; i++) {		//need to call bufgrow at least once
-	BUFGROW(unprocessed, nFiles + 1, ERMA_NO_MEMORY_UNPROCESSED);
-	if (i >= globbuf.gl_pathc)	//loop termination condition
-	    break;
-
-	/* Get next WISPR filename, but at the point after the last / or \ */
-	if (findInList(pathFile(globbuf.gl_pathv[i]), filesProcessedList) < 0)
-	    unprocessed[nFiles++] = strsave(globbuf.gl_pathv[i]);
+    int32 nFiles = 0;
+    for (int di = 0; di < globbufDir.gl_pathc; di++) {
+	/* For each dir, append the filename pattern and glob the result to get
+	 * an array of filenames. Append each one to 'unprocessed' if it's not
+	 * already in filesProcessedList. */
+	snprintf(templt1, sizeof(templt1), "%s/%s",
+		 globbufDir.gl_pathv[di], tfn);
+	if (glob(templt1, GLOB_NOESCAPE, NULL, &globbuf) != 0)
+	    return NULL;
+	
+	/* Walk through globbed array of files. For each one, see if it's in the
+	 * list of processed files; if not, add it to the unprocessed list. */
+	for (int32 i = 0; i < globbuf.gl_pathc; i++) {
+	    //Get next WISPR filename, but at the point after the last \ or /.
+	    char *fn = globbuf.gl_pathv[i];
+	    if (findInList(pathFile(fn), filesProcessedList) < 0) {
+		BUFGROW(unprocessed, nFiles + 1, ERMA_NO_MEMORY_UNPROCESSED);
+		unprocessed[nFiles++] = strsave(fn);
+	    }
+	}
+	globfree(&globbuf);
     }
+    globfree(&globbufDir);
+    BUFGROW(unprocessed, nFiles + 1, ERMA_NO_MEMORY_UNPROCESSED);
     unprocessed[nFiles] = NULL;
 
-/*    printf("getNewFiles: %d new files to process\n", nFiles);*/
-    
+    printf("getNewFiles: %d new files to process\n", nFiles);
     return unprocessed;
 }
 

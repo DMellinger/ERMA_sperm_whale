@@ -2,13 +2,13 @@
 #include "erma.h"
 
 /* Given a vector x of length nX, compute an exponentially decaying average of
- * x. Note that the average itself is returned, not x minus the average. This is
- * the running average
+ * x. Note that the average itself is returned, not x minus the average (but see
+ * doDiv below). This is the running average
  *		y(i) = alpha * y(i-1) + (1-alpha) * x(i)
  * where alpha is a decay constant. alpha is set such that a unit impulse will
  * decay to approximately 1/e in time decayTime. Before the averaging process is
  * started, the filter is "warmed up" for warmTime seconds; a good value to use
- * is decayTime*3, but if you don't want warmup, use warmTime=0.
+ * is decayTime*3. If you don't want warmup, use warmTime=0.
  *
  * pPrev can be a pointer to the previous value returned, so as to continue
  * processing an ongoing signal on successive calls. If you don't need pPrev,

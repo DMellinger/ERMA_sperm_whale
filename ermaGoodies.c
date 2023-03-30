@@ -18,8 +18,6 @@ int bufgrow(void *buf1, size_t *byteSize, size_t newByteSize, void **auxPtr)
     void *newbuf;
     int tmp;
     void **buf = buf1;			/* to get around compiler complaint */
-    static long count = 0;
-    count++;
 
     if (newByteSize <= *byteSize)
 	return 0;
@@ -61,18 +59,19 @@ char *strsave(char *str)
  */
 char *pathFile(char *pathname)
 {
-    char *fn;
+    char *fn, *fn0, *fn1;
 
-    fn = strrchr(pathname, '/');
-    if (fn != NULL)
-	fn++;				/* ++ to advance past the / */
-    else {
-	fn = strrchr(pathname, '\\');
-	if (fn != NULL)
-	    fn++;			/* ++ to advance past the \ */
-	else
-	    fn = pathname;		/* no / or \ in pathname */
-    }
+    //Need to handle the case in which pathname has both / and \ in it.
+    fn0 = strrchr(pathname, '/');
+    fn1 = strrchr(pathname, '\\');
+    if (fn0 == NULL && fn1 == NULL)
+	fn = pathname;			//no directory is present
+    else if (fn0 == NULL)
+	fn = fn1 + 1;			//only \ separator(s) are present
+    else if (fn1 == NULL)
+	fn = fn0 + 1;			//only / separator(s) are present
+    else
+	fn = MAX(fn0, fn1) + 1;		//both / and \ are present
 
     return fn;
 }
@@ -102,7 +101,7 @@ char *pathExt(char *pathname)
 char *pathRoot(char *buf, char *pathname)
 {
     char *e = pathExt(pathname);
-    long n;
+    int32 n;
 
     n = strlen(pathname) - (e!=NULL ? strlen(e)+1 : 0);
     strncpy(buf, pathname, n);		/* doesn't append \0! */
@@ -112,8 +111,9 @@ char *pathRoot(char *buf, char *pathname)
 
 
 /* Return the directory name of a path. The directory name is put in the given
- * buffer, which must be big enough to hold it, and the buffer is returned. If
- * the path doesn't have a directory name, "." is returned in the buffer.
+ * buffer, which must be big enough to hold it, and the buffer is returned. The
+ * buffer has no trailing / or \. If the path doesn't have a directory name, "."
+ * is returned in the buffer.
  */
 char *pathDir(char *buf, char *pathname)
 {
@@ -134,11 +134,9 @@ char *pathDir(char *buf, char *pathname)
 /* Find a string in a NULL-terminated list of strings. Returns the index of the
  * found item, or -1 if it's not there.
  */
-long findInList(char *str, char **strlist)
+int32 findInList(char *str, char **strlist)
 {
-    long i;
-
-    for (i = 0; strlist[i] != NULL; i++)
+    for (int32 i = 0; strlist[i] != NULL; i++)
 	if (!strcmp(str, strlist[i]))
 	    return i;
 
@@ -178,7 +176,7 @@ float meanF(float *x, int32 n)
 int32 maxIx(float *x, int32 nX, float *pMaxVal)
 {
     int32 maxIx = 0;
-    float maxVal = -MAXFLOAT;
+    float maxVal = -FLT_MAX;
 
     for (int32 i = 0; i < nX; i++) {
 	if (x[i] > maxVal) {
@@ -200,7 +198,7 @@ int32 maxIx(float *x, int32 nX, float *pMaxVal)
 int32 minIx(float *x, int32 nX, float *pMinVal)
 {
     int32 minIx = 0;
-    float minVal = MAXFLOAT;
+    float minVal = FLT_MAX;
 
     for (int32 i = 0; i < nX; i++) {
 	if (x[i] < minVal) {
@@ -217,14 +215,28 @@ int32 minIx(float *x, int32 nX, float *pMinVal)
 
 /* Save a signal to a file. Used in debugging.
  */
-void writeSignal(float *X, int32 nX, char *filename)
+void writeShortFromFloat(float *X, int32 nX, char *filename)
 {
+#if !ON_RPI
     FILE *fp = fopen(filename, "w");
     for (int32 i = 0; i < nX; i++) {
 	short xShort = (short)X[i];
 	fwrite(&xShort, sizeof(xShort), 1, fp);
     }
     fclose(fp);
+#endif
+}
+
+	    
+/* Save a signal to a file. Used in debugging.
+ */
+void writeFloatArray(float *X, int32 nX, char *filename)
+{
+#if !ON_RPI
+    FILE *fp = fopen(filename, "w");
+    fwrite(X, sizeof(X[0]), nX, fp);
+    fclose(fp);
+#endif
 }
 
 	    
@@ -232,15 +244,17 @@ void writeSignal(float *X, int32 nX, char *filename)
  */
 void printSignal(float *X, int32 nX, char *filename)
 {
+#if !ON_RPI
     FILE *fp = fopen(filename, "w");
     for (int32 i = 0; i < nX; i++)
 	fprintf(fp, "%.3f\n", X[i]);
     fclose(fp);
+#endif
 }
 
 	    
 /* Convert a struct tm that's in UTC into a time_t (seconds since 1/1/1970).
- * From StackOverflow. This is like the library function timegm, but it is
+ * From StackOverflow. This is like the library function timegm, but that is
  * non-standard and not necessarily available everywhere.
  */
 time_t my_timegm(struct tm *tm)
@@ -262,6 +276,48 @@ time_t my_timegm(struct tm *tm)
     return ret;
 }
 
+
+/* Construct a string in the format YYMMDD-hhmmss from a (time_t) timestamp tE,
+ * which represents seconds since The Epoch (1/1/1970). The string is written
+ * into a caller-supplied buffer 'buf', which must have space for at least 14
+ * bytes. Returns 'buf'.
+ */
+char *timeStrE(char *buf, time_t tE)
+{
+    struct tm t_tm = *gmtime(&tE);
+    
+    //Print start- and stop-times of the encounter.
+    sprintf(buf, "%02d%02d%02d-%02d%02d%02d",
+	    t_tm.tm_year % 100,	//just last two digits of year
+	    t_tm.tm_mon + 1,	//tm_mon numbers months starting at 0
+	    t_tm.tm_mday,	//day of month
+	    t_tm.tm_hour,
+	    t_tm.tm_min,
+	    t_tm.tm_sec);
+    return buf;
+}
+
+
+/* Construct a string in the format YYMMDD-hhmmss from a (double) day number tD,
+ * which represents days since The Epoch (1/1/1970). The string is written into
+ * a caller-supplied buffer 'buf', which must have space for at least 14
+ * bytes. Returns 'buf'.
+ */
+char *timeStrD(char *buf, double tD)
+{
+    return timeStrE(buf, round(tD * 24*60*60));
+}
+
+
+/* Convert an array of shorts (i.e., int16s) to floats.
+ */
+void int16ToFloat(float *dst, int16 *src, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+	dst[i] = (float)src[i];
+}
+
+
 /************************ Endian-correction operations **********************/
 
 /* Read 16-bit data into buf from an open file that has little-endian data (like
@@ -269,7 +325,7 @@ time_t my_timegm(struct tm *tm)
  * buf must be large enough to hold the data. n is the number of shorts to read
  * into buf[]. Returns 1 on success, 0 on failure.
  */
-int readLittleEndian16(int16_t *buf, long n, FILE *fp)
+int readLittleEndian16(int16_t *buf, size_t n, FILE *fp)
 {
     int one = 1;		/* for testing endianness */
 
@@ -281,14 +337,33 @@ int readLittleEndian16(int16_t *buf, long n, FILE *fp)
 
     return 1;
 }
-    
 
-/* Read long data into buf from an open file that has little-endian data (like
+
+/* Read int24 data into buf from an open file that has little-endian data (like
  * WISPR and WAVE files), making sure it's formatted correctly for this machine.
- * buf must be large enough to hold the data. n is the number of longs to read
+ * buf must be large enough to hold the data. n is the number of int24s to read
  * into buf[]. Returns 1 on success, 0 on failure.
  */
-int readLittleEndian32(int32_t *buf, long n, FILE *fp)
+int readLittleEndian24(void *buf, size_t n, FILE *fp)	//int24 doesn't exist
+{
+    int one = 1;		/* for testing endianness */
+
+    if (fread(buf, 3, n, fp) != n)
+	return 0;
+    
+    if (*(char *)&one != 1)	/* test for big-endianness */
+	swapBytes24(buf, n);	/* this is a big-endian machine; swap bytes */
+
+    return 1;
+}
+    
+
+/* Read int32 data into buf from an open file that has little-endian data (like
+ * WISPR and WAVE files), making sure it's formatted correctly for this machine.
+ * buf must be large enough to hold the data. n is the number of int32s to read
+ * into buf[]. Returns 1 on success, 0 on failure.
+ */
+int readLittleEndian32(int32_t *buf, size_t n, FILE *fp)
 {
     int one = 1;		/* for testing endianness */
 
@@ -302,38 +377,84 @@ int readLittleEndian32(int32_t *buf, long n, FILE *fp)
 }
     
 
+/* Read int64 data into buf from an open file that has little-endian data (like
+ * WISPR and WAVE files), making sure it's formatted correctly for this machine.
+ * buf must be large enough to hold the data. n is the number of int64s to read
+ * into buf[]. Returns 1 on success, 0 on failure.
+ */
+int readLittleEndian64(int64_t *buf, size_t n, FILE *fp)
+{
+    int one = 1;		/* for testing endianness */
+
+    if (fread(buf, 4, n, fp) != n)
+	return 0;
+    
+    if (*(char *)&one != 1)	/* test for big-endianness */
+	swapBytes64(buf, n);	/* this is a big-endian machine; swap bytes */
+
+    return 1;
+}
+    
+
+/* Exchange two unsigned char values.
+ */
+#define SWAPBYTE_UCHAR(a,b) \
+    { unsigned char tmp; tmp = (a); (a) = (b); (b) = tmp; }
+
+
 /* Swap bytes in a buffer of shorts.
  */
-void swapBytes16(int16_t *buf, long n)
+void swapBytes16(int16_t *buf, size_t n)
 {
     register unsigned char *p, *pEnd;
     register unsigned char tmp;
 
     pEnd = (unsigned char *)(buf + n);
     for (p = (unsigned char *)buf; p < pEnd; p += 2) {
-	tmp = *p;
-	*p = *(p + 1);
-	*(p + 1) = tmp;
+	SWAPBYTE_UCHAR(p[0], p[1])
     }
 }
 
 
-/* Swap bytes in a buffer of longs.
+/* Swap bytes in a buffer of int24s.
  */
-void swapBytes32(int32_t *buf, long n)
+void swapBytes24(void *buf, size_t n)	//use (void *) since int24 doesn't exist
 {
     register unsigned char *p, *pEnd;
-    register unsigned char tmp0, tmp1, tmp2;
+
+    pEnd = (unsigned char *)buf + n*3;		//cast buf BEFORE adding n*3
+    for (p = (unsigned char *)buf; p < pEnd; p += 3) {
+	SWAPBYTE_UCHAR(p[0], p[2])
+    }
+}
+
+
+/* Swap bytes in a buffer of int32s.
+ */
+void swapBytes32(int32_t *buf, size_t n)
+{
+    register unsigned char *p, *pEnd;
 
     pEnd = (unsigned char *)(buf + n);
     for (p = (unsigned char *)buf; p < pEnd; p += 4) {
-	tmp0 = p[0];
-	tmp1 = p[1];
-	tmp2 = p[2];
-	p[0] = p[3];
-	p[1] = tmp2;
-	p[2] = tmp1;
-	p[3] = tmp0;
+	SWAPBYTE_UCHAR(p[0], p[3])
+	SWAPBYTE_UCHAR(p[1], p[2])
+    }
+}
+
+
+/* Swap bytes in a buffer of int64s.
+ */
+void swapBytes64(int64_t *buf, size_t n)
+{
+    register unsigned char *p, *pEnd;
+
+    pEnd = (unsigned char *)(buf + n);
+    for (p = (unsigned char *)buf; p < pEnd; p += 8) {
+	SWAPBYTE_UCHAR(p[0], p[7])
+	SWAPBYTE_UCHAR(p[1], p[6])
+	SWAPBYTE_UCHAR(p[2], p[5])
+	SWAPBYTE_UCHAR(p[3], p[4])
     }
 }
 /********************* End of endian-correction operations *******************/

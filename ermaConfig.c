@@ -17,7 +17,7 @@ ERMACONFIG *ermaReadConfigFile(char *dir, char *filename)
     char *ln, *newVar, *newVal;
     size_t szLn, nbyte, newVarSize, newValSize;
     int64_t last;
-    long nRead;
+    int32 nRead;
     char pathname[256];
 
     /* Create and initialize a new ERMACONFIG */
@@ -82,9 +82,7 @@ ERMACONFIG *newERMACONFIG(void)
  */
 void deleteERMACONFIG(ERMACONFIG *ec)
 {
-    long i;
-
-    for (i = 0; i < ec->n; i++) {
+    for (int32 i = 0; i < ec->n; i++) {
 	free(ec->varname[i]);
 	free(ec->value[i]);
     }
@@ -96,10 +94,8 @@ void deleteERMACONFIG(ERMACONFIG *ec)
 
 void printERMACONFIG(ERMACONFIG *ec)
 {
-    long i;
-    
     printf("ERMACONFIG:\n");
-    for (i = 0; i < ec->n; i++)
+    for (int32 i = 0; i < ec->n; i++)
 	printf("\t'%s' is '%s'\n", ec->varname[i], ec->value[i]);
 }
 
@@ -107,7 +103,7 @@ void printERMACONFIG(ERMACONFIG *ec)
 /* This makes space for n filter coefficients in the A array and n in the B
  * array.
  */
-static void allocFilterCoeffs(long n, float **pA, float **pB)
+static void allocFilterCoeffs(int32 n, float **pA, float **pB)
 {
     if (n > 0) {
 	*pA = calloc(n, sizeof((*pA)[0]));
@@ -119,7 +115,7 @@ static void allocFilterCoeffs(long n, float **pA, float **pB)
 
 
 /* Convert each string in an ERMACONFIG into its corresponding value as a
- * float/long/whatever in an ERMAPARAMS. Any members of the ERMAPARAMS that
+ * float/int32/whatever in an ERMAPARAMS. Any members of the ERMAPARAMS that
  * didn't have anything specified for them in the ERMACONFIG (i.e., in the
  * rpi.cnf config file) will be the default value, which is set in
  * ErmaMain.c.
@@ -136,30 +132,30 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
     ermaGetString(ec, "outDir",		&ep->outDir);
     ermaGetString(ec, "allDetsFiles",	&ep->allDetsFiles);
     ermaGetString(ec, "encFileList",	&ep->encFileList);
-    ermaGetString(ec, "encFileList",	&ep->encFileList);
+    ermaGetString(ec, "wisprEncFileDir",&ep->wisprEncFileDir);
     ermaGetString(ec, "allDetsPrefix",	&ep->allDetsPrefix);
     ermaGetString(ec, "encDetsPrefix",	&ep->encDetsPrefix);
 
     /* GPIO pins */
-    ermaGetLong(ec, "gpioWisprActive", &ep->gpioWisprActive);
-    ermaGetLong(ec, "gpioRPiActive",   &ep->gpioRPiActive);
+    ermaGetInt32(ec, "gpioWisprActive", &ep->gpioWisprActive);
+    ermaGetInt32(ec, "gpioRPiActive",   &ep->gpioRPiActive);
 
     /* Stuff for filtering: */
     /* These 'N' params must be read before the corresponding A and B ones so
      * allocFilterCoeffs can be called to allocate space for the A/B arrays */
-    ermaGetLong      (ec, "dsfN",	&ep->dsfN);	/* before dsfA/B! */
-    ermaGetLong      (ec, "numerN",	&ep->numerN);	/* before numerA/B! */
-    ermaGetLong      (ec, "denomN",	&ep->denomN);	/* before denomA/B! */
-    allocFilterCoeffs(ep->dsfN,   &ep->dsfA,   &ep->dsfB);
-    allocFilterCoeffs(ep->numerN, &ep->numerA, &ep->numerB);
-    allocFilterCoeffs(ep->denomN, &ep->denomA, &ep->denomB);
+    ermaGetInt32     (ec, "dsfN",   &ep->dsfN);	/* before dsfA/B! */
+    ermaGetInt32     (ec, "numerN", &ep->numerN);	/* before numerA/B! */
+    ermaGetInt32     (ec, "denomN", &ep->denomN);	/* before denomA/B! */
+    allocFilterCoeffs(ep->dsfN,     &ep->dsfA,   &ep->dsfB);
+    allocFilterCoeffs(ep->numerN,   &ep->numerA, &ep->numerB);
+    allocFilterCoeffs(ep->denomN,   &ep->denomA, &ep->denomB);
     ermaGetFloatArray(ec, "dsfA",   ep->dsfA,   ep->dsfN);
     ermaGetFloatArray(ec, "dsfB",   ep->dsfB,   ep->dsfN);
     ermaGetFloatArray(ec, "numerA", ep->numerA, ep->numerN);
     ermaGetFloatArray(ec, "numerB", ep->numerB, ep->numerN);
     ermaGetFloatArray(ec, "denomA", ep->denomA, ep->denomN);
     ermaGetFloatArray(ec, "denomB", ep->denomB, ep->denomN);
-    ermaGetLong      (ec, "decim",  &ep->decim);
+    ermaGetInt32     (ec, "decim",  &ep->decim);
 
     /* stuff for ERMA algorithm: */
     ermaGetFloat(ec, "decayTime",	&ep->decayTime);
@@ -183,6 +179,7 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
     ermaGetFloat(ec, "clicksPerBlock",	&ep->clicksPerBlock);
     ermaGetFloat(ec, "consecBlocks",	&ep->consecBlocks);
     ermaGetFloat(ec, "hitsPerEnc",	&ep->hitsPerEnc);
+    ermaGetInt32(ec, "clicksToSave",	&ep->clicksToSave);
     
     /* stuff for glider noise removal: */
     ermaGetFloat(ec, "ns_tBlockS",	&ep->ns_tBlockS);
@@ -196,9 +193,7 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
  */
 char *ermaFindVar(ERMACONFIG *ec, char *varname)
 {
-    long i;
-
-    for (i = 0; i < ec->n; i++)
+    for (int32 i = 0; i < ec->n; i++)
 	if (!strcmp(varname, ec->varname[i]))
 	    return ec->value[i];
     
@@ -206,12 +201,12 @@ char *ermaFindVar(ERMACONFIG *ec, char *varname)
 }
 
 
-/* Find varname in the ERMACONFIG ec and put its value into *val as a long.  If
- * varname isn't in ec, *val isn't changed. Returns 1 on success, 0 on failure
- * (not being able to find varname or not being able to scan the value as the
- * right type).
+/* Find varname in the ERMACONFIG ec and put its value into *val as an int32.
+ * If varname isn't in ec, *val isn't changed. Returns 1 on success, 0 on
+ * failure (not being able to find varname or not being able to scan the value
+ * as the right type).
  */
-int ermaGetLong(ERMACONFIG *ec, char *varname, long *val)
+int ermaGetInt32(ERMACONFIG *ec, char *varname, int32 *val)
 {
     char *foundValueStr = ermaFindVar(ec, varname);
 
@@ -278,17 +273,16 @@ int ermaGetString(ERMACONFIG *ec, char *varname, char **val)
  * able to find varname). Note that this makes it impossible to differentiate
  * not finding varname, and finding varname but scanning 0 items from it.
  */
-int ermaGetFloatArray(ERMACONFIG *ec, char *varname, float *val, long arrLen)
+int ermaGetFloatArray(ERMACONFIG *ec, char *varname, float *val, int32 arrLen)
 {
     char *foundValueStr = ermaFindVar(ec, varname);
-    long i, pos;
-    int nScan;
+    int nScan;		//must be int for sscanf %n
 
     if (foundValueStr == NULL)
 	return 0;
 
-    pos = 0;
-    for (i = 0; i < arrLen; i++) {
+    int32 pos = 0;
+    for (int32 i = 0; i < arrLen; i++) {
 	/* scan the next float in the sequence */
 	if (sscanf(&foundValueStr[pos], "%f%n", &val[i], &nScan) == 0)
 	    return i;

@@ -62,7 +62,7 @@ int initIirFilter(IIRFILTER *iif,	/* in (iif->A,B) and out (iif->A1,B1) */
  * the last n values of X. Incidentally, this is one more X-value than needed.
  */
 void iirFilter(IIRFILTER *iif,		/* in */
-	       float *X, long nX,	/* in */
+	       float *X, int32 nX,	/* in */
 	       float *warmup,		/* in & out; length 2n */
 	       float *Y)		/* out; length n (same as X) */
 {
@@ -166,7 +166,7 @@ float B[] = {
      0.02008166987778636800,
     -0.00273707904023168250,
 };
-long n = NUM_OF(B);
+int32 n = NUM_OF(B);
 
 float A[] = {
        1.00000000000000000000,
@@ -186,7 +186,7 @@ float A[] = {
 
 main()
 {
-    long fd, i, nsamp;
+    int32 fd, i, nsamp;
     struct stat st;
     short *x;
     float *X, *Y, *Z, *warmup;

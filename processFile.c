@@ -16,9 +16,9 @@
 
 
 /* This is for a 180-kHz signal downsampled to 60 kHz */
-float B[] = { 1, 2, 3 };
-float A[] = { };
-long nB = NUM_OF(B);
+/*float B[] = { 1, 2, 3 };*/
+/*float A[] = { };*/
+/*int32 nB = NUM_OF(B);*/
 
 
 
@@ -31,31 +31,30 @@ static FILECLICKS fileC;	/* clicks found in one file */
 void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
 		 double *pTMinE, double *pTMaxE)
 {
-    WISPRINFO wi;
-    static int count = 0;
     static int firstTime = 1;		/* controls initialization */
-    FILE *fp;
-    char dirPath[256];
-
     if (firstTime) {
 	firstTime = 0;
 	ermaFiltPrep(ep);
 	initQUIETTIMES(&quietT);
 	initFILECLICKS(&fileC);
 	initENCOUNTERS(&enc);
+	printf("processFile: file with all clicks: %s\n", outPath);
     }
 
+    WISPRINFO wi;
     wisprInitWISPRINFO(&wi);
-    wisprReadHeader(&wi, inPath);
-/*    if (count++ < 2) {*/
-/*	printf("Output file name: %s\n", outPath);*/
+    if (!wisprReadHeader(&wi, inPath))		//returns NULL on bad header
+	return;
+    static int count = 0;
+    if (count++ < 2) {
 /*	wisprPrintInfo(&wi);*/
-/*    }*/
+    }
 
     *pTMinE = MIN(*pTMinE, wi.timeE);
     *pTMaxE = MAX(*pTMaxE, wi.timeE + wi.nSamp / wi.sRate);
     
     /* Ensure the directory for the output file exists, creating it if not */
+    char dirPath[256];
     pathDir(dirPath, outPath);		/* get dir name sans file part */
     if (!dirExists(dirPath)) {
 	if (mkdir(dirPath, 0777) != 0)
@@ -70,8 +69,8 @@ void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
     findQuietTimes(snd, wi.nSamp, wi.sRate, ep, &quietT);
 /*    printf("processFile %s\n", inPath); printQuietTimes(&quietT);*//* DEBUG */
 
-    /* Run ERMA, getting click times in this file in fileC. Append these to allC
-     * as Epoch times. */
+    /* Run ERMA (in ermaNew.c), getting click times in this file in
+     * fileC. Append these to allC as Epoch times. */
     ermaSegments(snd, &wi, ep, &quietT, &fileC);
     appendClicks(allC, &fileC, wi.timeE);
 
