@@ -15,17 +15,21 @@
 #define ERMA_NO_MEMORY_AVGPOWER		9	/* findQuiet.c */
 #define ERMA_NO_MEMORY_QUIETTIME	10	/* findQuiet.c */
 #define ERMA_NO_MEMORY_WISPR_SNDBUF	11	/* wisprFile.c */
-#define ERMA_NO_MEMORY_ERMACONFIG	12	/* ermaConfig.c */
-#define ERMA_NO_MEMORY_STRSAVE		13	/* ermaGoodies.h */
-#define ERMA_NO_MEMORY_WISPR_READDATA	14	/* wisprFile.c */
-#define ERMA_NO_MEMORY_WISPR_PRINT	15	/* wisprFile.c */
-#define ERMA_NO_MEMORY_NUMER_DENOM	16	/* ermaNew.c */
-#define ERMA_NO_MEMORY_PEAK		17	/* ermaNew.c */
-#define ERMA_NO_MEMORY_NHITS		18	/* encounters.c */
-#define ERMA_NO_MEMORY_ENCCOUNT		19	/* encounters.c */
-#define ERMA_NO_MEMORY_ENCOUNTERS	20	/* encounters.c */
-#define ERMA_NO_MEMORY_CREATECONFIG	21	/* ermaConfig.c */
-#define CANT_READ_WAVE			22	/* wisprFile.c */
-#define CANT_READ_WISPR			23	/* wisprFile.c */
+#define ERMA_NO_MEMORY_WISPR_PSND	12	/* wisprFile.c */
+#define ERMA_NO_MEMORY_ERMACONFIG	13	/* ermaConfig.c */
+#define ERMA_NO_MEMORY_STRSAVE		14	/* ermaGoodies.h */
+#define ERMA_NO_MEMORY_WISPR_READDATA	15	/* wisprFile.c */
+#define ERMA_NO_MEMORY_WISPR_PRINT	16	/* wisprFile.c */
+#define ERMA_NO_MEMORY_NUMER_DENOM	17	/* ermaNew.c */
+#define ERMA_NO_MEMORY_PEAK		18	/* ermaNew.c */
+#define ERMA_NO_MEMORY_NHITS		19	/* encounters.c */
+#define ERMA_NO_MEMORY_ENCCOUNT		20	/* encounters.c */
+#define ERMA_NO_MEMORY_ENCOUNTERS	21	/* encounters.c */
+#define ERMA_NO_MEMORY_CREATECONFIG	22	/* ermaConfig.c */
+#define CANT_READ_WAVE			23	/* wisprFile.c */
+#define CANT_READ_WISPR_SAMPLES		24	/* wisprFile.c */
+#define CANT_READ_WISPR_FLOATS		25	/* wisprFile.c */
+#define WISPR_BAD_SAMPLE_SIZE		26	/* wisprFile.c */
+#define ERMA_NO_MEMORY_NUMER_DENOM_AVG	27	/* ermaNew.c */
 
 #endif	/* _ERMAERRORS_H */

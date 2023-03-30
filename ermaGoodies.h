@@ -11,14 +11,18 @@ char *pathFile(char *pathname);
 char *pathExt(char *pathname);
 char *pathRoot(char *buf, char *pathname);
 char *pathDir(char *buf, char *pathname);
-long findInList(char *str, char **strlist);
+int32 findInList(char *str, char **strlist);
 int dirExists(char *dirPath);
 float meanF(float *x, int32 n);
 int32 maxIx(float *x, int32 nX, float *pMaxVal);
 int32 minIx(float *x, int32 nX, float *pMinVal);
-void writeSignal(float *X, int32 nX, char *filename);
 void printSignal(float *X, int32 nX, char *filename);
+void writeShortFromFloat(float *X, int32 nX, char *filename);
+void writeFloatArray(float *X, int32 nX, char *filename);
 time_t my_timegm(struct tm *tm);
+char *timeStrE(char *buf, time_t tE);
+char *timeStrD(char *buf, double tD);
+void int16ToFloat(float *dst, int16 *src, size_t n);
 
 
 /* This allocates a buffer buf large enough to hold n elements and calling
@@ -35,16 +39,20 @@ time_t my_timegm(struct tm *tm);
  */
 #define BUFGROW(buf, n, errorNum)					\
     if ((buf##Size) < (n) * sizeof((buf)[0])) {				\
-    if (bufgrow(&(buf), &(buf##Size), (n) * sizeof((buf)[0]), NULL))	\
+    	if (bufgrow(&(buf), &(buf##Size), (n) * sizeof((buf)[0]), NULL))\
 	    exit(errorNum);						\
     } else	//this swallows the ';' after a BUFGROW invocation
 
 
 /* Use these "read" functions get data from a file and fix its endianness. */
-int readLittleEndian16(int16_t *buf, long n, FILE *fp);
-int readLittleEndian32(int32_t *buf, long n, FILE *fp);
-void swapBytes16(int16_t *buf, long n);
-void swapBytes32(int32_t *buf, long n);
+int readLittleEndian16(int16_t *buf, size_t n, FILE *fp);
+int readLittleEndian24(void    *buf, size_t n, FILE *fp);
+int readLittleEndian32(int32_t *buf, size_t n, FILE *fp);
+int readLittleEndian64(int64_t *buf, size_t n, FILE *fp);
+void swapBytes16(int16_t *buf, size_t n);
+void swapBytes24(void    *buf, size_t n);
+void swapBytes32(int32_t *buf, size_t n);
+void swapBytes64(int64_t *buf, size_t n);
 
 #define NUM_OF(x)	(sizeof(x) / sizeof((x)[0]))
 

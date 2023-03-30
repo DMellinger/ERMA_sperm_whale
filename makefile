@@ -14,6 +14,7 @@
 # processFileStub.o there.
 
 CFLAGS = -g
+LDLIBS = -lm
 
 ErmaMain: ErmaMain.o processFile.o wisprFile.o wavFile.o ermaConfig.o \
 	ermaGoodies.o gpio.o iirFilter.o ermaFilt.o quietTimes.o ermaNew.o \

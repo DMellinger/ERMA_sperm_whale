@@ -2,17 +2,19 @@
 #define _ENCOUNTERS_H_
 
 
-
+/* This holds an array of encounters, each one stored as start- and stop-times
+ * in tSpanD.
+ */
 typedef struct {
-    double (*tSpanD)[2];// start- and stop-times of encounters, in days
-    long n;	    	// number of valid elements in t
-    size_t tSpanDSize;	// for bufgrow()
+    TIMESPAN *tSpanD;	//start- and stop-times of encounters, in days
+    size_t tSpanDSize;	//for bufgrow()
+    int32 n;	    	//number of valid elements in tSpanD
 } ENCOUNTERS;
 
 void initENCOUNTERS(ENCOUNTERS *enc);
 void findEncounters(ALLCLICKS *allClicks, ERMAPARAMS *ep, ENCOUNTERS *enc);
-void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *encDetsPath,
-		    double tMinE, double tMaxE, char *encFileListPath);
-
+void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *piEncDetsPath,
+		    char *wisprEncDetsPath, double tMinE, double tMaxE,
+		    char *encFileListPath, int32 clicksToSave);
 
 #endif /* _ENCOUNTERS_H_ */

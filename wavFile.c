@@ -9,21 +9,22 @@
 #endif
 
 /* Find a chunk in the WAVE file with a given name. Returns 1 on failure; on
- * success, returns 0 and leaves the chunk size in *chunkSize and the file-read
- * pointer just after the chunk size.
+ * success, returns 0 and leaves the chunk size in *pChunkSize and the file-read
+ * pointer fp just after the chunk size.
  */
-static int findChunk(FILE *fp, char *chunkName, uint32_t *pChunkSize)
+static int findChunk(FILE *fp, char *chunkName, size_t *pChunkSize)
 {
     char buf[4];
-    long i, len;
+    int32 chunkSize32;
 
     fseek(fp, 12, SEEK_SET);
     while (1) {
 	if (fread(buf, 1, 4, fp) != 4 ||
-	    !readLittleEndian32(pChunkSize, 1, fp)) {
+	    !readLittleEndian32(&chunkSize32, 1, fp)) {
 	    return 1;
 	}
-	len = strlen(chunkName);
+	*pChunkSize = (size_t)chunkSize32;
+	size_t len = strlen(chunkName);
 	if (!strncasecmp(buf, chunkName, len)) {
 	    /* Watch out for chunk names with only 3 letters */
 	    if (len == 4 || (len == 3 && (buf[3] == ' ' || buf[3] == '\0')))
@@ -42,7 +43,8 @@ static int findChunk(FILE *fp, char *chunkName, uint32_t *pChunkSize)
 WISPRINFO *wavReadHeader(WISPRINFO *wi, char *filename)
 {
     unsigned char buf12[12];
-    uint32_t chunkSize, sRateLong;
+    size_t chunkSize;
+    uint32_t sRateLong;
     uint16_t sampleFmt, nChans, bitsPerSam;
 
     wi->fp = fopen(filename, "r");
@@ -90,9 +92,9 @@ WISPRINFO *wavReadHeader(WISPRINFO *wi, char *filename)
  * data (correcting for endianness if needed) and store it in buf. Returns 0 on
  * success, 1 on failure.
 */
-int wavReadData(int16_t *buf, WISPRINFO *wi, long offset, long nSamp)
+int wavReadData(int16_t *buf, WISPRINFO *wi, size_t offset, size_t nSamp)
 {
-    uint32_t chunkSize;
+    size_t chunkSize;
 
     if (wi->fp != NULL                                    &&
 	!findChunk(wi->fp, "data", &chunkSize)            &&
@@ -121,20 +123,19 @@ void wavCloseFile(WISPRINFO *wi)
  */
 double getTimeFromName(char *fn)
 {
-    long len = strlen(fn);
-    long i, j, nDigit;
+    int32 len = strlen(fn);
     static char middleChar[] = "-_Tt";	/* separators between day and hour */
     char pat[100];
     struct tm tm;
     int msec = 0, pos;
 
     /* Walk thru fn looking for string matching YYMMDD-hhmmss[.msec] */
-    for (i = 0; i < len - 13; i++) {
+    for (int32 i = 0; i < len - 13; i++) {
 	/* Walk thru possible characters between YYMMDD and hhmmss. */
-	for (j = 0; j < NUM_OF(middleChar); j++) {
+	for (int32 j = 0; j < NUM_OF(middleChar); j++) {
 	    sprintf(pat, "%%02d%%02d%%02d%c%%02d%%02d%%02d.%%d%n",
 		    middleChar[j], &pos);
-	    nDigit = pos - 14;
+	    int32 nDigit = pos - 14;
 	    if (sscanf(&fn[i], pat, &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
 		       &tm.tm_hour, &tm.tm_min, &tm.tm_sec, &msec) >= 6) {
 		tm.tm_year += 100;	//make it based on 2000, not 1900

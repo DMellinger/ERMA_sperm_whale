@@ -8,10 +8,10 @@
  * longs, etc., in ermaConfig.c/gatherErmaParams().
  */
 typedef struct {
-    long n;		/* number of valid members of varname[] and value[] */
     char **varname;	/* array of varnames */
     char **value;	/* array of value strings */
     size_t varnameSize, valueSize;	/* for bufgrow */
+    int32 n;		/* number of valid members of varname[] and value[] */
 } ERMACONFIG;
 
 
@@ -21,7 +21,8 @@ typedef struct {
  * ermaConfig.c/gatherErmaParams().
  *
  * NB: If you change anything here, be sure to keep the list of default values
- * in the same order in the definition of ep in ErmaMain.c.
+ * in the same order in the definition of ep in ErmaMain.c. Also update
+ * ermaConfig.c/gatherErmaParams to parse the value from the rpi.cnf.
  */
 typedef struct 
 {   /* file names (excluding baseDir and configFileName, which are fixed) */
@@ -30,21 +31,22 @@ typedef struct
     char *outDir;	//where to put results of processing
     char *allDetsFiles;	//list of files that have ALL detections
     char *encFileList;	//has list of files to upload by WISPR, which clears it
+    char *wisprEncFileDir;//pathname of baseDir when SD card is mounted on WISPR
     char *allDetsPrefix;//prefix for files holding times of all clicks detected
     char *encDetsPrefix;//prefix for files holding times of dets in encounters
 
     /* GPIO pins: */
-    long gpioWisprActive;//input pin # to tell RPi to process files
-    long gpioRPiActive;	//output pin # to tell WISPR that RPi is busy
+    int32 gpioWisprActive;//input pin # to tell RPi to process files
+    int32 gpioRPiActive;	//output pin # to tell WISPR that RPi is busy
 
     /* stuff for filtering: */
     float *dsfA, *dsfB;	//IIR filter coefficients for downsampling filter
-    long dsfN;		//length of dsfA and dsfB (= filter order + 1)
-    long decim;		//decimation factor
+    int32 dsfN;		//length of dsfA and dsfB (= filter order + 1)
+    int32 decim;		//decimation factor
     float *numerA, *numerB; //IIR filter coefficients for numerator filter
-    long numerN;	//length of dsfA and dsfB (= filter order + 1)
+    int32 numerN;	//length of dsfA and dsfB (= filter order + 1)
     float *denomA, *denomB; //IIR filter coefficients for denominator filter
-    long denomN;	//length of dsfA and dsfB (= filter order + 1)
+    int32 denomN;	//length of dsfA and dsfB (= filter order + 1)
 
     /* stuff for ERMA algorithm: */
     float decayTime;	//exponential-decay constant for expdecay()
@@ -66,9 +68,10 @@ typedef struct
     /* stuff for findEncounters: */
     float blockLenS;	//length of a 'block', s
     float clicksPerBlock; //min clicks per block to count as a 'hit'
-    float consecBlocks; //number of consecutive blocks to consider
+    float consecBlocks; //min consecutive blocks needed for an 'encounter'
     float hitsPerEnc;	//min number of block hits in consecutive
       			//blocks needed to count as an encounter
+    int32 clicksToSave;	//number of clicks per encounter to save
     
     /* stuff for glider noise removal: */
     float ns_tBlockS;	//block duration for measuring noise, s
@@ -87,15 +90,15 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep);
 char *ermaFindVar(ERMACONFIG *ec, char *varname);
 
 /* These are for scanning ERMACONFIGs for a given varname and interpreting its
- * corresponding value as a long/float/char/whatever. They return the number of
+ * corresponding value as a int32/float/char/whatever. They return the number of
  * items successfully scanned, so for most of them it's 1 on success, 0 on
  * failure.
  */
-int ermaGetLong  (ERMACONFIG *ec, char *varname, long *val);
+int ermaGetInt32 (ERMACONFIG *ec, char *varname, int32 *val);
 int ermaGetFloat (ERMACONFIG *ec, char *varname, float *val);
 int ermaGetDouble(ERMACONFIG *ec, char *varname, double *val);
 int ermaGetString(ERMACONFIG *ec, char *varname, char **val);
-int ermaGetFloatArray(ERMACONFIG *ec, char *varname, float *val, long arrLen);
+int ermaGetFloatArray(ERMACONFIG *ec, char *varname, float *val, int32 arrLen);
 
 
 #endif    /* _ERMACONFIG_H_ */

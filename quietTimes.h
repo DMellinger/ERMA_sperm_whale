@@ -2,7 +2,8 @@
 #define _QUIETTIMES_H_
 
 /*#include <stdlib.h>*/
-/*#include "ermaConfig.h"		*//* for ERMAPARAMS */
+/*#include "erma.h.h"		*//* for TIMESPAN */
+/*#include "ermaConfig.h"	*//* for ERMAPARAMS */
 
 
 /* This holds start- and stop-times in a file, in both samples and seconds from
@@ -10,27 +11,26 @@
  */
 typedef struct {
     union {
-	int32 sam[2];		    /* can refer to sam[0] and sam[1], or... */
-	struct {int32 sam0, sam1;}; /* ...sam0 and sam1 */
-    };	
-    union {
-	float t[2];		    /* can refer to t[0] and t[1], or... */
-	struct {float t0, t1;};	    /* ...t0 and t1 */
+	int64_t sam[2];			//can refer to sam[0] and sam[1], or...
+	struct {int64_t sam0, sam1;};	//...sam0 and sam1 */
     };
-} TIMESPAN;
+    TIMESPAN tS;			//same information, but in seconds
+} TIMESPAN_S;
 
 
-typedef struct
-{   
-    TIMESPAN *tSpan;/* start- and stop-times/samples of quiet periods in file */
-    long n;	    /* number of valid elements in t */
-    size_t tSpanSize;/* for bufgrow() */
+/* This holds the set of quiet times in a file.
+ */
+typedef struct {   
+    TIMESPAN_S *tSpan;	//start- and stop-times & -sams of quiet periods in file
+    size_t tSpanSize;	//for bufgrow()
+    int32 n;		//number of valid elements in tSpan
 } QUIETTIMES;
+
 
 void initQUIETTIMES(QUIETTIMES *qt);
 void resetQuietTimes(QUIETTIMES *qt);
-QUIETTIMES *findQuietTimes(float *snd, long nSamp, float sRate, ERMAPARAMS *ep,
-		    QUIETTIMES *qt);
+QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
+			   ERMAPARAMS *ep, QUIETTIMES *qt);
 void printQuietTimes(QUIETTIMES *qt);
 
 #endif	/* _QUIETTIMES_H_ */

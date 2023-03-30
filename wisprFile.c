@@ -38,9 +38,7 @@ void wisprInitWISPRINFO(WISPRINFO *wi)
  */
 WISPRINFO *wisprReadHeader(WISPRINFO *wi, char *filename)
 {
-    int fd, lineNum, nScanned;
-    long fsize;
-    size_t lnSize, last;
+    size_t nScanned, fsize, lnSize, last;
     ssize_t nRead, nReadTotal;
     char *ln, varname[BUFSZ], value[BUFSZ];
     struct tm tm;
@@ -50,16 +48,16 @@ WISPRINFO *wisprReadHeader(WISPRINFO *wi, char *filename)
 	return wavReadHeader(wi, filename);
 
     wi->isWave = 0;
+    wi->sampleSize = 2;			//default
     wi->fp = fopen(filename, "r");
     if (wi->fp == NULL)
 	return NULL;
 
-    /* Figure out how many samples are in the file, assuming sample size = 2.
-     * This might get overridden below by the file_size line in the file.
-     */
-    fseek(wi->fp, 0L, SEEK_END);
-    wi->nSamp = (ftell(wi->fp) - WISPR_HEADER_SIZE) / WISPR_SAMPLE_SIZE;
-    rewind(wi->fp);
+    /* nBytesFromHeader=0 here is a flag value. If the WISPR file header has a
+     * file_size line, nBytesFromHeader gets set by that; if it doesn't have
+     * such a line, nBytesFromHeader stays 0. (-1 would be a better flag value
+     * but size_t is unsigned.) */
+    size_t nBytesFromHeader = 0;
 
     /* Main loop: Read a header line, parse it, and store the value in wi. The
      * loop exits when it hits a \0 (NUL) character (the normal case), or after
@@ -70,7 +68,7 @@ WISPRINFO *wisprReadHeader(WISPRINFO *wi, char *filename)
     ln = NULL;			/* gets malloc'ed by getline() */
     lnSize = 0;
     wi->wisprVersion[0] = '\0';
-    for (lineNum = 0; nReadTotal < WISPR_HEADER_SIZE; lineNum++) {
+    for (int32 lineNum = 0; nReadTotal < WISPR_HEADER_SIZE; lineNum++) {
 	nRead = getline(&ln, &lnSize, wi->fp);
 	/* Reached end of header lines, as indicated by a \0 character? */
 	if (nRead <= 0 || (nRead > 0 && ln[0] == '\0')) {
@@ -111,12 +109,11 @@ WISPRINFO *wisprReadHeader(WISPRINFO *wi, char *filename)
 		    }
 		} else if (!strcmp(varname, "file_size")) {
 		    /* Parse a file size. file_size in the WISPR file header is
-		     * the number of 512-byte (WISPR_BLOCK_SIZE) blocks. If the
-		     * file is shorter than this, the smaller value is used. */
+		     * the number of 512-byte (WISPR_BLOCK_SIZE) blocks. */
 		    fsize = -1;
-		    sscanf(value, "%ld", &fsize);
-		    wi->nSamp = MIN(wi->nSamp,
-				   fsize*WISPR_BLOCK_SIZE / WISPR_SAMPLE_SIZE);
+		    if (sscanf(value, "%ld", &fsize) == 1)
+			nBytesFromHeader = fsize * WISPR_BLOCK_SIZE;
+
 		}
 	    }
 	}
@@ -124,101 +121,162 @@ WISPRINFO *wisprReadHeader(WISPRINFO *wi, char *filename)
     if (ln != NULL)
 	free(ln);
 
+    /* Figure out how many samples are in the file. This is the lesser of how
+     * many the file claims are there, and how many are actually there based on
+     * file length. */
+    fseek(wi->fp, 0L, SEEK_END);
+    size_t nBytesFromLen = ftell(wi->fp) - WISPR_HEADER_SIZE;
+    size_t nBytes = (nBytesFromHeader == 0)
+	? nBytesFromLen : MIN(nBytesFromLen, nBytesFromHeader);
+    rewind(wi->fp);
+    wi->nSamp = nBytes / wi->sampleSize;
+
+    /* Reset file-reading pointer */
     fseek(wi->fp, WISPR_HEADER_SIZE, SEEK_SET);
-    return wi;
+
+    /* Check various fields for validity. */
+    if (wi->sRate >= 50 &&
+	wi->nSamp > 1000 &&
+	(wi->sampleSize == 2 || wi->sampleSize == 3) &&
+	wi->timeE >= 946684800) {		//that's 1/1/2000
+	return wi;
+    } else {
+	return NULL;
+    }
 }
 
 
-/* Read the samples as an array of shorts and store them as an array of floats.
- * Allocates space for the arrays as needed.
+/* Read all the samples as an array of 2- or 3-byte ints and store them as an
+ * array of floats in *pSnd (whose size of bufgrow is *pSndSize). Allocates
+ * space for the array in *pSnd as needed.
  */
 void wisprReadSamples(WISPRINFO *wi, float **pSnd, size_t *pSndSize)
 {
     /* store the read-in data temporarily until conversion to float */
-    static int16_t *sndBuf = NULL;
+    static void *sndBuf = NULL;
     static size_t sndBufSize = 0;
-
-    /* Ensure there's enough space. */
     
-    BUFGROW(sndBuf, wi->nSamp, ERMA_NO_MEMORY_WISPR_SNDBUF);
-    BUFGROW(*pSnd,  wi->nSamp, ERMA_NO_MEMORY_WISPR_SNDBUF);
+    /* Ensure there's enough space in both sndBuf and *pSnd. */
+    void *x = sndBuf;
+    size_t xSize = sndBufSize;
+    if (bufgrow(&sndBuf, &sndBufSize, wi->nSamp * wi->sampleSize, NULL)) {
+	fprintf(stderr, "wisprReadSamples: bufgrow failed:\n");
+	fprintf(stderr, "	sndBuf x%x->x%x, sndBufSize %ld->%ld\n",
+		x, sndBuf, xSize, wi->nSamp * wi->sampleSize);
+	exit(ERMA_NO_MEMORY_WISPR_SNDBUF);
+    }
+/*    fprintf(stderr, "wisprReadSamples: BUFGROW(x%x[len = %ld], %ld) ...",*/
+/*	    *pSnd, *pSndSize, wi->nSamp * sizeof((*pSnd)[0]));*/
+    BUFGROW(*pSnd, wi->nSamp, ERMA_NO_MEMORY_WISPR_PSND);
+    fprintf(stderr, " succeeded\n");
     if (wi->isWave) {
 	if (wavReadData(sndBuf, wi, 0, wi->nSamp))
 	    exit(CANT_READ_WAVE);
+	int16ToFloat(*pSnd, sndBuf, wi->nSamp);
     } else {
-	if (wisprReadData(&sndBuf, wi, 0, wi->nSamp))
-	    exit(CANT_READ_WISPR);
+	if (wisprReadFloat(*pSnd, sndBuf, 0, wi->nSamp, wi))
+	    exit(CANT_READ_WISPR_FLOATS);
     }
-
-    /* Convert shorts to floats. */
-    for (long i = 0; i < wi->nSamp; i++)
-	(*pSnd)[i] = (float)sndBuf[i];
 }
 
 
-/* Read nSam shorts into *bufp from the WISPR file in wi->fp, which should have
+/* Read nSam shorts into sams[] from the WISPR file in wi->fp, which should have
  * been opened by wisprReadHeader. The data are read starting at sample
- * offsetSam (the start of the file is offsetSam==0), though if offsetSam is
- * negative, it means to continue reading at the current position in the
- * file. *bufp should point to a buffer to hold nSampToRead samples of 2-byte
- * data. *bufp can also point to NULL, in which case it gets malloc'ed here (and
- * the caller should eventually free it) and *bufp gets set to the malloc'ed
- * buffer. Returns 0 on success, 1 on failure.
+ * offsetSam (the start of the file is offsetSam==0), though if offsetSam is <
+ * 0, it means to read at the current position of wi->fp's file-reading
+ * pointer. sams should point to an array to hold nSam float samples. Returns 0
+ * on success, 1 on failure.
  */
-long wisprReadData(int16_t **bufp, WISPRINFO *wi, long offsetSam, long nSam)
+size_t wisprReadFloat(float *sams, void *sndBuf, long offsetSam, size_t nSam,
+		      WISPRINFO *wi)
 {
-    unsigned char *p, *pEnd;
-    unsigned char tmp;
-    int one = 1;			/* for testing endianness */
-
-    nSam = MIN(nSam, wi->nSamp - offsetSam);
-    if (nSam <= 0)
+    if (offsetSam > wi->nSamp) {
+	fprintf(stderr, "wisprReadFloat fail: offsetSam %ld > wi->nSamp %ld\n",
+		offsetSam, wi->nSamp);
 	return 1;
-    if (*bufp == NULL) {
-	*bufp = malloc(nSam * WISPR_SAMPLE_SIZE);
-	if (*bufp == NULL)
-	    exit(ERMA_NO_MEMORY_WISPR_READDATA);
     }
+    nSam = MIN(nSam, wi->nSamp - offsetSam);
     if (offsetSam >= 0)
-	fseek(wi->fp, WISPR_HEADER_SIZE + offsetSam * WISPR_SAMPLE_SIZE,
-	      SEEK_SET);
+	fseek(wi->fp, WISPR_HEADER_SIZE + offsetSam * wi->sampleSize, SEEK_SET);
+    if (nSam == 0)
+	return 0;
     
     /* Read data, fixing endianness if needed. WISPR files are little-endian. */
-    readLittleEndian16(*bufp, nSam, wi->fp);
+    switch(wi->sampleSize) {
+    case 2:
+	/* Read 2-byte samples of whatever endianness and convert to float. */
+	readLittleEndian16(sndBuf, nSam, wi->fp);
+	int16ToFloat(sams, (int16 *)sndBuf, wi->nSamp);
+	break;
+    case 3:
+	/* Read 3-byte samples of whatever endianness and convert to float. */
+	if (fread(sndBuf, 3, nSam, wi->fp) != nSam) {
+	    fprintf(stderr, "wisprReadFloat fail: sndBuf x%x, nSam %ld, fp x%x (#%d)",
+		    sndBuf, nSam, wi->fp, wi->fp - stdout);
+	    exit(CANT_READ_WISPR_SAMPLES);
+	}
+
+	int one = 1;				//for testing endianness
+	if (*(char *)&one) {			//test endianness
+	    //Little endian.
+	    unsigned char *s = (unsigned char *)sndBuf;
+	    for (size_t i = 0; i < nSam; i++, s += 3) {
+		int32 samVal = s[2] << 16 | s[1] << 8 | s[0];
+		samVal |= (s[2] & 0x80) ? 0xff000000 : 0;   //sign-extend
+		sams[i] = (float)samVal;
+	    }
+	} else {
+	    //Big endian.
+	    unsigned char *s = (unsigned char *)sndBuf;
+	    for (size_t i = 0; i < nSam; i++, s += 3) {
+		int32 samVal = s[0] << 16 | s[1] << 8 | s[2];
+		samVal |= (s[0] & 0x80) ? 0xff000000 : 0;   //sign-extend
+		sams[i] = (float)samVal;
+	    }
+	}
+	break;
+    default:
+	exit(WISPR_BAD_SAMPLE_SIZE);
+    }	//switch
 
     return 0;
 }
 
 
-/* Print out some useful information from a WISPRINFO.
+/* Print out some useful information from a WISPRINFO. You must have read the
+ * WISPR file header (via wisprReadHeader) first.
  */
 void wisprPrintInfo(WISPRINFO *wi)
 {
-    long nSamToPrint = 50, nSamRead, i;
-    short *buf;
+    int32 nSamToPrint = 50;
 
     printf("WISPRINFO:\n");
     printf(wi->fp == NULL ? "\tfile closed" : "\tfile open, at position %d\n",
 	   ftell(wi->fp));
     printf("\tWISPR file version is %s\n", wi->wisprVersion);
     printf("\tn sam is %ld (= %d * %.2f / %d)\n", wi->nSamp, WISPR_BLOCK_SIZE,
-	   (float)wi->nSamp / ((float)WISPR_BLOCK_SIZE / WISPR_SAMPLE_SIZE),
-	   WISPR_SAMPLE_SIZE);
+	   (float)wi->nSamp / ((float)WISPR_BLOCK_SIZE / wi->sampleSize),
+	   wi->sampleSize);
     time_t t = (time_t)floor(wi->timeE);	//gmtime wants pointer to time_t
     printf("\ttime is %s", asctime(gmtime(&t)));
     printf("\tsample size is %d\n", wi->sampleSize);
     printf("\tsample rate is %f\n", wi->sRate);
 
     /* Print some samples */
-    buf = (short *)malloc(nSamToPrint * WISPR_SAMPLE_SIZE);
-    if (buf == NULL) exit(ERMA_NO_MEMORY_WISPR_PRINT);
-    wisprReadData(&buf, wi, 0L, nSamToPrint);
-    fseek(wi->fp, -nSamToPrint * WISPR_SAMPLE_SIZE, SEEK_CUR);
-    printf("\tFirst %d samples:", nSamRead);	/* the \n is supplied below */
-    for (i = 0; i < nSamRead; i++)
-	printf("%s%5d", (i%10 == 0) ? "\n\t" : " ", buf[i]);
-    printf("\n");
-    free(buf);
+    void *rawBuf = malloc(nSamToPrint * wi->sampleSize);
+    float *floatBuf = (float *)malloc(nSamToPrint * sizeof(float));
+    if (rawBuf == NULL || floatBuf == NULL)
+	exit(ERMA_NO_MEMORY_WISPR_PRINT);
+    size_t startPos = ftell(wi->fp);
+    if (!wisprReadFloat(floatBuf, rawBuf, 0, nSamToPrint, wi)) {
+	fseek(wi->fp, startPos, SEEK_SET);
+	printf("\tFirst %d samples:", nSamToPrint);   //the \n is supplied below
+	for (int32 i = 0; i < nSamToPrint; i++)
+	    printf("%s%5d", (i%10 == 0) ? "\n\t" : " ", floatBuf[i]);
+	printf("\n");
+    }
+    free(floatBuf);
+    free(rawBuf);
 }
 
 

@@ -2,8 +2,8 @@
 #include "erma.h"
 
 /* defined below */
-void checkQuiet(long i0, long i1, float blockDurS, long blockLen, int32 nBlocks,
-		float sRate, ERMAPARAMS *ep, QUIETTIMES *qt);
+void checkQuiet(int64 i0, int64 i1, float blockDurS, int64 blockLen,
+		int32 nBlocks, float sRate, ERMAPARAMS *ep, QUIETTIMES *qt);
 
 
 
@@ -27,8 +27,8 @@ void resetQuietTimes(QUIETTIMES *qt)
 /* Given a signal snd, find the sections of time when glider motors aren't
  * running and things are reasonably quiet.
  */
-QUIETTIMES *findQuietTimes(float *snd, long nSamp, float sRate, ERMAPARAMS *ep,
-			   QUIETTIMES *qt)
+QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
+			   ERMAPARAMS *ep, QUIETTIMES *qt)
 {
     int32 blockLen = round(ep->ns_tBlockS * sRate);  /* block len in samples */
     float blockDurS = blockLen / sRate;		/* block len in s */
@@ -52,11 +52,13 @@ QUIETTIMES *findQuietTimes(float *snd, long nSamp, float sRate, ERMAPARAMS *ep,
 	}
 	avgPower[i] = (float)(sum / (double)blockLen);
     }
+#if !ON_RPI    
     printSignal(avgPower, nBlocks, "temp-avgPower.csv");
+#endif
 
     /* Find noise: runs of minConsec blocks that are all above threshold. */
     int32 minConsec = roundf(ep->ns_tConsecS / blockDurS);
-    long padBlock = ep->ns_padSec / blockDurS;	/* amount to pad in blocks */
+    int32 padBlock = ep->ns_padSec / blockDurS;	/* amount to pad in blocks */
     int inNoise = 0;		/* currently in long-enough noise section? */
     int32 quietStart = 0;	/* start ix of most recent non-noise section */
     int32 n = 0;		/* number of consecutive noise blocks seen */
@@ -92,17 +94,18 @@ QUIETTIMES *findQuietTimes(float *snd, long nSamp, float sRate, ERMAPARAMS *ep,
  * block i0 and ends at block i1, to see if it's long enough. If it is, add it
  * to the QUIETTIMES list.
  */
-void checkQuiet(long i0, long i1, float blockDurS, long blockLen, int32 nBlocks,
-		float sRate, ERMAPARAMS *ep, QUIETTIMES *qt)
+void checkQuiet(int64 i0, int64 i1, float blockDurS, int64 blockLen,	//in
+		int32 nBlocks, float sRate, ERMAPARAMS *ep,		//in
+		QUIETTIMES *qt)					//in & out
 {
     float dur = (i1 - i0) * blockDurS;
 
     if (dur >= ep->ns_minQuietS) {
 	BUFGROW(qt->tSpan,   qt->n + 1, ERMA_NO_MEMORY_QUIETTIME);
-	qt->tSpan[qt->n].sam0 = MAX(i0, 0)       * blockLen;
-	qt->tSpan[qt->n].sam1 = MIN(i1, nBlocks) * blockLen;
-	qt->tSpan[qt->n].t0   = qt->tSpan[qt->n].sam0 / sRate;
-	qt->tSpan[qt->n].t1   = qt->tSpan[qt->n].sam1 / sRate;
+	qt->tSpan[qt->n].sam0  = MAX(i0, 0)       * blockLen;
+	qt->tSpan[qt->n].sam1  = MIN(i1, nBlocks) * blockLen;
+	qt->tSpan[qt->n].tS.t0 = qt->tSpan[qt->n].sam0 / sRate;
+	qt->tSpan[qt->n].tS.t1 = qt->tSpan[qt->n].sam1 / sRate;
 	qt->n++;
     }
 }
@@ -111,12 +114,10 @@ void checkQuiet(long i0, long i1, float blockDurS, long blockLen, int32 nBlocks,
 /* For debugging */
 void printQuietTimes(QUIETTIMES *qt)
 {
-    long i;
-
     printf("Quiet times: \n");
-    for (i = 0; i < qt->n; i++) {
-	printf("    %.3f-%.3f (sams %d-%d)\n", qt->tSpan[i].t0, qt->tSpan[i].t1,
-	       qt->tSpan[i].sam0, qt->tSpan[i].sam1);
+    for (int32 i = 0; i < qt->n; i++) {
+	printf("    %.3f-%.3f (sams %d-%d)\n", qt->tSpan[i].tS.t0,
+	       qt->tSpan[i].tS.t1, qt->tSpan[i].sam0, qt->tSpan[i].sam1);
     }
 }
 
