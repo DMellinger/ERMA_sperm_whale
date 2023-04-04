@@ -31,5 +31,7 @@
 #define CANT_READ_WISPR_FLOATS		25	/* wisprFile.c */
 #define WISPR_BAD_SAMPLE_SIZE		26	/* wisprFile.c */
 #define ERMA_NO_MEMORY_NUMER_DENOM_AVG	27	/* ermaNew.c */
+#define ERMA_NO_MEMORY_READFLOATS	28	/* ermaGoodies.c */
+#define ERMA_NO_MEMORY_GETTHRESH	29	/* quietTimes.c */
 
 #endif	/* _ERMAERRORS_H */

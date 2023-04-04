@@ -16,12 +16,15 @@ int dirExists(char *dirPath);
 float meanF(float *x, int32 n);
 int32 maxIx(float *x, int32 nX, float *pMaxVal);
 int32 minIx(float *x, int32 nX, float *pMinVal);
-void printSignal(float *X, int32 nX, char *filename);
+void printSignalToFile(float *X, int32 nX, char *filename);
+void printFloatArray(char *title, float *X, int32 nX);
 void writeShortFromFloat(float *X, int32 nX, char *filename);
 void writeFloatArray(float *X, int32 nX, char *filename);
+size_t readFloatArray(float **pX, size_t *pXSize, size_t maxN, char *filename);
 time_t my_timegm(struct tm *tm);
 char *timeStrE(char *buf, time_t tE);
 char *timeStrD(char *buf, double tD);
+float percentile(float *x, size_t xLen, float pct);	//x[] GETS ALTERED!!!
 void int16ToFloat(float *dst, int16 *src, size_t n);
 
 
@@ -41,7 +44,12 @@ void int16ToFloat(float *dst, int16 *src, size_t n);
     if ((buf##Size) < (n) * sizeof((buf)[0])) {				\
     	if (bufgrow(&(buf), &(buf##Size), (n) * sizeof((buf)[0]), NULL))\
 	    exit(errorNum);						\
-    } else	//this swallows the ';' after a BUFGROW invocation
+    } else	//the if/else swallows the ';' after a BUFGROW invocation
+
+
+/* Swap operation. The if/else here swallows up a trailing ';'. */
+#define SWAP(a,b) \
+    if (1) { typeof(a) tmp = (b); (b) = (a); (a) = tmp; } else
 
 
 /* Use these "read" functions get data from a file and fix its endianness. */

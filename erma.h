@@ -24,7 +24,7 @@
  * by commenting/uncommenting them out. Use them with "#ifdef <FLAGNAME>".
  * They're always off when compiled on the RPi.
  */
-#if ON_RPI
+#if !ON_RPI && 0
 //Save temp-numerPow.flt, temp-ratio.flt, temp-normPowNumer.flt, etc.
 #define DEBUG_SAVE_ARRAYS
 

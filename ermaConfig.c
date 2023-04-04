@@ -135,6 +135,7 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
     ermaGetString(ec, "wisprEncFileDir",&ep->wisprEncFileDir);
     ermaGetString(ec, "allDetsPrefix",	&ep->allDetsPrefix);
     ermaGetString(ec, "encDetsPrefix",	&ep->encDetsPrefix);
+    ermaGetString(ec, "pctFileName",	&ep->pctFileName);
 
     /* GPIO pins */
     ermaGetInt32(ec, "gpioWisprActive", &ep->gpioWisprActive);
@@ -184,7 +185,10 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
     /* stuff for glider noise removal: */
     ermaGetFloat(ec, "ns_tBlockS",	&ep->ns_tBlockS);
     ermaGetFloat(ec, "ns_tConsecS",	&ep->ns_tConsecS);
-    ermaGetFloat(ec, "ns_thresh",	&ep->ns_thresh);
+    ermaGetFloat(ec, "ns_pctile",	&ep->ns_pctile);
+    ermaGetInt32(ec, "ns_nRecent",	&ep->ns_nRecent);
+    ermaGetFloat(ec, "ns_medianMult",	&ep->ns_medianMult);
+    /*ermaGetFloat(ec, "ns_thresh",	&ep->ns_thresh);*/ //obsolete
     ermaGetFloat(ec, "ns_padSec",	&ep->ns_padSec);
 }
 

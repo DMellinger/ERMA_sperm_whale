@@ -34,6 +34,7 @@ typedef struct
     char *wisprEncFileDir;//pathname of baseDir when SD card is mounted on WISPR
     char *allDetsPrefix;//prefix for files holding times of all clicks detected
     char *encDetsPrefix;//prefix for files holding times of dets in encounters
+    char *pctFileName;	//for storing recent 10th-percentile values
 
     /* GPIO pins: */
     int32 gpioWisprActive;//input pin # to tell RPi to process files
@@ -76,7 +77,10 @@ typedef struct
     /* stuff for glider noise removal: */
     float ns_tBlockS;	//block duration for measuring noise, s
     float ns_tConsecS;	//consecutive time needed to decide 'noise', s
-    float ns_thresh;	//noise threshold
+    float ns_pctile;	//percentile for measuring background noise level
+    int32 ns_nRecent;	//number of recent ns_pctile values to get median of
+    float ns_medianMult;//thresh = this * (median of recent ns_pctile values)
+    //float ns_thresh;	//noise threshold
     float ns_padSec;  	//pad noise periods w/this for ramp up/down
     float ns_minQuietS;	//minimum length of a noise section
 } ERMAPARAMS;

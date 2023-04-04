@@ -30,7 +30,7 @@ typedef struct {
 void initQUIETTIMES(QUIETTIMES *qt);
 void resetQuietTimes(QUIETTIMES *qt);
 QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
-			   ERMAPARAMS *ep, QUIETTIMES *qt);
+			   ERMAPARAMS *ep, QUIETTIMES *qt, char *baseDir);
 void printQuietTimes(QUIETTIMES *qt);
 
 #endif	/* _QUIETTIMES_H_ */

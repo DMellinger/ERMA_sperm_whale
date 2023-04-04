@@ -5,6 +5,6 @@
 /*#include "ermaConfig.h"*/
 
 void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
-		 double *pTMinE, double *pTMaxE);
+		 double *pTMinE, double *pTMaxE, char *baseDir);
 
 #endif    /* _PROCESSFILE_H_ */

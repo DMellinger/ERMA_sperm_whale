@@ -4,7 +4,13 @@
 /* defined below */
 void checkQuiet(int64 i0, int64 i1, float blockDurS, int64 blockLen,
 		int32 nBlocks, float sRate, ERMAPARAMS *ep, QUIETTIMES *qt);
+float getThresh(float *avgPower, size_t nPow, ERMAPARAMS *ep, char *baseDir);
 
+/* This is the threshold when the avgPower vector is empty. It shouldn't ever
+ * get used since that vector is empty, but hopefully has a reasonable value
+ * just in case.
+ */
+float quietTimesDefaultThresh = 5e8;
 
 
 void initQUIETTIMES(QUIETTIMES *qt)
@@ -28,7 +34,7 @@ void resetQuietTimes(QUIETTIMES *qt)
  * running and things are reasonably quiet.
  */
 QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
-			   ERMAPARAMS *ep, QUIETTIMES *qt)
+			   ERMAPARAMS *ep, QUIETTIMES *qt, char *baseDir)
 {
     int32 blockLen = round(ep->ns_tBlockS * sRate);  /* block len in samples */
     float blockDurS = blockLen / sRate;		/* block len in s */
@@ -53,8 +59,10 @@ QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
 	avgPower[i] = (float)(sum / (double)blockLen);
     }
 #if !ON_RPI    
-    printSignal(avgPower, nBlocks, "temp-avgPower.csv");
+    printSignalToFile(avgPower, nBlocks, "temp-avgPower.csv");
 #endif
+
+    float thresh = getThresh(avgPower, nBlocks, ep, baseDir);
 
     /* Find noise: runs of minConsec blocks that are all above threshold. */
     int32 minConsec = roundf(ep->ns_tConsecS / blockDurS);
@@ -63,7 +71,7 @@ QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
     int32 quietStart = 0;	/* start ix of most recent non-noise section */
     int32 n = 0;		/* number of consecutive noise blocks seen */
     for (int32 i = 0; i < nBlocks; i++) {
-	if (avgPower[i] >= ep->ns_thresh) {
+	if (avgPower[i] >= thresh) {
 	    /* Above noise threshold; check if already in noise section. */
 	    n += 1;
 	    if (n == minConsec && !inNoise) {
@@ -121,6 +129,71 @@ void printQuietTimes(QUIETTIMES *qt)
     }
 }
 
+
+
+/* Find threshold. If avgPower is above this for an extended period of time,
+ * it's evidence that a glider motor is on. This threshold is the median of the
+ * 12 most recent 10th-percentile values of avgPower. Only it's not 12, it's
+ * ep->ns_nRecent; it's not the 10th percentile, it's ep->ns_pctile; and the
+ * threshold itself isn't this median, it's this median times ep->ns_medianMult.
+ *
+ * Also, at the start of processing, we don't have any recent 10th-percentile
+ * values. So use the most recent values from the last run, which are stored in
+ * ep->pctFileName.
+ */
+float getThresh(float *avgPower, size_t nPow, ERMAPARAMS *ep, char *baseDir)
+{
+    static float *pcts = NULL;
+    static size_t pctsSize = 0;
+    static int nPcts = 0;
+
+    if (nPow == 0)
+	return quietTimesDefaultThresh;
+
+    /* Construct pathname of file that has recent 10th-percentile values. */
+    char pctPath[256];
+    snprintf(pctPath, sizeof(pctPath), "%s/%s", baseDir, ep->pctFileName);
+
+    if (pcts == NULL) {
+	//First time. See if there are pcts left over from the last run.
+	BUFGROW(pcts, ep->ns_nRecent, ERMA_NO_MEMORY_GETTHRESH);
+	nPcts = readFloatArray(&pcts, &pctsSize, ep->ns_nRecent, pctPath);
+/*	printf("getThresh: %d pcts from file: ", nPcts);*/
+/*	printFloatArray("", pcts, nPcts);*/
+    }
+
+    /* Calculate the 10th-percentile (or really ep->ns_pctile) value. First make
+     * a copy of avgPower, since percentile() rearranges it. */
+    static float *powCopy = NULL;
+    static size_t powCopySize = 0;
+    BUFGROW(powCopy, nPow, ERMA_NO_MEMORY_GETTHRESH);
+    memcpy(powCopy, avgPower, nPow * sizeof(avgPower[0]));
+    float pct = percentile(powCopy, nPow, ep->ns_pctile);
+    /* Store pct at the end of pcts[]. If pcts is already full, first shift it
+     * left so the oldest value disappears. */
+    if (nPcts == ep->ns_nRecent) {		    //is pcts[] full?
+	for (int i = 0; i < ep->ns_nRecent-1; i++)  //shift pcts left one place
+	    pcts[i] = pcts[i+1];
+	nPcts--;
+    }
+    pcts[nPcts++] = pct;
+/*    printFloatArray("getThresh: pcts[]", pcts, nPcts);*/
+
+    /* Find median of pcts. First make a copy before calling percentile. */
+    static float *pctsCopy = NULL;
+    size_t pctsCopySize = 0;
+    BUFGROW(pctsCopy, ep->ns_nRecent, ERMA_NO_MEMORY_GETTHRESH);
+    memcpy(pctsCopy, pcts, nPcts * sizeof(pcts[0]));
+    float median = percentile(pctsCopy, nPcts, 0.5);	//0.5 = median
+
+    /* Get the threshold. */
+    float thresh = median * ep->ns_medianMult;
+
+    /* Save pcts in the pctPath file in case this is the last run. */
+    writeFloatArray(pcts, nPcts, pctPath);
+
+    return thresh;
+}
 
 
 #ifdef NEVER

@@ -100,9 +100,11 @@ void ermaNew(float *seg, int32 nSam, float sRate, ERMAPARAMS *ep,
 
     /* Convert filtered signals to power per kHz of bandwidth, re-using numer
      * and denom for this (called powNumer and powDenom in * MATLAB). */
+    float bwNumerInv = 1.0 / bwNumer;
+    float bwDenomInv = 1.0 / bwDenom;
     for (int32 i = 0; i < nX; i++) {
-	numer[i] = numer[i] * numer[i] / bwNumer;
-	denom[i] = denom[i] * denom[i] / bwDenom;
+	numer[i] = numer[i] * numer[i] * bwNumerInv;
+	denom[i] = denom[i] * denom[i] * bwDenomInv;
     }
     /* Compute power ratio while power is in numer and denom. */
     float avgSam = round(ep->avgT * sRate);	// # samples to average over
@@ -118,7 +120,7 @@ void ermaNew(float *seg, int32 nSam, float sRate, ERMAPARAMS *ep,
     //Delay from numer to ratio, i.e., numer[i] aligns with ratio[i - delaySam]
     int32 delaySam = avgSam / 2;
 
-#if DEBUG_SAVE_ARRAYS
+#ifdef DEBUG_SAVE_ARRAYS
     printf("ermaNew: printing temp files\n");
     writeFloatArray(numer,  nX, "temp-numerPow.flt");
     writeFloatArray(denom,  nX, "temp-denomPow.flt");
@@ -270,7 +272,7 @@ void findClicks(float *x, int32 nX, float *ratio, int32 nRatio, float sRate,
     float powerThreshPerKHz = ep->powerThresh / bwNumer;
     int32 nLow = 0;
     int32 i = 0;
-    while (i < nRatio) {	/* i can get changed inside the loop */
+    while (i < nRatio) {	//i can get changed inside the loop
 	if (x[i] <= powerThreshPerKHz) {
 	    nLow += 1;
 	} else {

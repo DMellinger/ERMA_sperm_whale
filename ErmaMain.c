@@ -30,9 +30,10 @@
 /*    char *baseDir = "/media/pi/wispr_sd0";*/
     char *baseDir = "/media/cimerspi4/WISPR_SD";
 #else
-/*    char *baseDir = "C:/Dave/sounds/PacWavePerimeterData"; */
+    char *baseDir = "C:/Dave/sounds/PacWavePerimeterData/COPY_FOR_ERMA_TEST"; 
 /*      char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm";*/
-char *baseDir = "C:/Dave/sounds/GoM_gliders_2017/resampledAt187kHz";
+/*char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm/COPY_FOR_ERMA_TEST";*/
+/*char *baseDir = "C:/Dave/sounds/GoM_gliders_2017/resampledAt187kHz";*/
 /*char *baseDir = "C:\\Dave\\sounds\\fileFormatExamples\\WISPR\\3_byte_samples";*/
 #endif
 
@@ -70,8 +71,8 @@ static ERMAPARAMS ep =
 #if ON_RPI
      "[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
 #else
-     //"[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
-     "[0-9][0-9][0-9][0-9][0-9][0-9]/*.wav",
+     "[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
+     //"[0-9][0-9][0-9][0-9][0-9][0-9]/*.wav",
 #endif
 
      //outDir: where in the outDir directory to put the detection report files
@@ -115,6 +116,14 @@ static ERMAPARAMS ep =
      //the file gets uploaded to the basestation. In contrast to allDetsPrefix,
      //these files are in the <baseDir> directory.
      "encounter_dets",
+
+     //pctFileName holds the 12 or so most recent 10th-percentile values of the
+     //avgPower vector. The median of these is used in quietTimes.c as the noise
+     //background level. Only it's not 12, it's ep->nRecent; it's not the 10th
+     //percentile, it's the ep->ns_pctile'th one; and the median isn't used, but
+     //rather the median times ns_medianMult. If avgPower is above this product,
+     //it's evidence that a glider motor is on.
+     "saved_percentiles",
      /************************** end of file names ***************************/
 
      /* GPIO pins */
@@ -141,7 +150,8 @@ static ERMAPARAMS ep =
      /* stuff for ERMA algorithm: */
      0.25,	//decayTime: exponential-decay constant for expdecay()
 /*     200,	//powerThresh: detection threshold per kHz in numerator band*/
-     50,	//powerThresh: detection threshold per kHz in numerator band
+/*     50,	//powerThresh: detection threshold per kHz in numerator band*/
+     80,	//powerThresh: detection threshold per kHz in numerator band
 /*     0.10,	//refractoryT: stop peaks w/in this after start of a click*/
      0.01,	//refractoryT: stop peaks w/in this after start of a click
      0.005,	//peakNbdT: peak is highest of anything within this time
@@ -171,8 +181,12 @@ static ERMAPARAMS ep =
 //    0.1,	*///ns_tBlockS: block duration for measuring noise, s
      0.01,	//ns_tBlockS: block duration for measuring noise, s
      0.3,	//ns_tConsecS: consecutive time needed to decide 'noise', s
+     0.10,	//ns_pctile: percentile for measuring background noise level
+     12,	//ns_nRecent: number of recent ns_pctile values to get median of
+     4.0,	//ns_medianMult: thresh = this * median(recent ns_pctile values)
+     //		//ns_thresh obsolete; now gotten from pctile,nRecent,medianMult
 /*     2e4,     *///ns_thresh: noise threshold [Perimeter .wav files]
-     4e8,	//ns_thresh: noise threshold [glider .dat files]
+/*     4e8,	*///ns_thresh: noise threshold [glider .dat files]
      0.1,	//ns_padSec: pad noise periods w/this for ramp up/down
      0.1,	//ns_minQuietS: minimum length of a noise section
     };
@@ -246,10 +260,11 @@ int main(int argc, char **argv)
      * makes this program hang up or bomb, it is skipped on future runs.
      */
     if (unprocessedFiles != NULL && unprocessedFiles[0] != NULL) {
-	/* Construct the name of the output file. The output file for this run
+	/* Construct the name of the output files. The output file for this run
 	 * (allDetsPath) is named with the part of the first input soundfile
 	 * after the "WISPR_" prefix - this is normally the date/time stamp -
 	 * and with a .csv extension.
+	 * Note: a path name is also constructed in quietTimes.c.
 	 */
 	pathRoot(buf, pathFile(unprocessedFiles[0]));
 	char *fileTimestamp = !strncmp(buf,"WISPR_",6) ? buf+6 : buf;
@@ -271,12 +286,12 @@ int main(int argc, char **argv)
 /*	for (i = 0; unprocessedFiles[i] != NULL && i < 1; i++) {  *//* DEBUG */
 /*	    printf("******* DEBUG: ErmaMain doing only a few **********\n");*/
 
-	    printf("ErmaMain: processing %s\n", unprocessedFiles[i]);
+	    printf("#%d ErmaMain: processing %s\n", i, unprocessedFiles[i]);
 	    appendToProcessed(pathFile(unprocessedFiles[i]),filesProcessedPath);
 /*	    printf("******* DEBUG: not appending to files_processed.txt**\n");*/
 
 	    processFile(unprocessedFiles[i], allDetsPath, &ep, &allC,
-			&tMinE, &tMaxE);
+			&tMinE, &tMaxE, baseDir);
 
 	    /* Check to be sure that WISPR wants RPi to keep running */
 	    #if ON_RPI

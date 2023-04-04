@@ -29,7 +29,7 @@ static ENCOUNTERS enc;		/* whale encounter times */
 static FILECLICKS fileC;	/* clicks found in one file */
 
 void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
-		 double *pTMinE, double *pTMaxE)
+		 double *pTMinE, double *pTMaxE, char *baseDir)
 {
     static int firstTime = 1;		/* controls initialization */
     if (firstTime) {
@@ -66,7 +66,7 @@ void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
 
     /* Find the useful data spans */
     resetQuietTimes(&quietT);
-    findQuietTimes(snd, wi.nSamp, wi.sRate, ep, &quietT);
+    findQuietTimes(snd, wi.nSamp, wi.sRate, ep, &quietT, baseDir);
 /*    printf("processFile %s\n", inPath); printQuietTimes(&quietT);*//* DEBUG */
 
     /* Run ERMA (in ermaNew.c), getting click times in this file in

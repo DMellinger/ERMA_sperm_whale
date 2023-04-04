@@ -168,7 +168,7 @@ void wisprReadSamples(WISPRINFO *wi, float **pSnd, size_t *pSndSize)
 /*    fprintf(stderr, "wisprReadSamples: BUFGROW(x%x[len = %ld], %ld) ...",*/
 /*	    *pSnd, *pSndSize, wi->nSamp * sizeof((*pSnd)[0]));*/
     BUFGROW(*pSnd, wi->nSamp, ERMA_NO_MEMORY_WISPR_PSND);
-    fprintf(stderr, " succeeded\n");
+/*    fprintf(stderr, " succeeded\n");*/
     if (wi->isWave) {
 	if (wavReadData(sndBuf, wi, 0, wi->nSamp))
 	    exit(CANT_READ_WAVE);
