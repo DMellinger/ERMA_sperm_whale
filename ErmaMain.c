@@ -27,14 +27,14 @@
  * name (namely <baseDir>/<configFileName>) that's read to change parameters.
  */
 #if ON_RPI
-/*    char *baseDir = "/media/pi/wispr_sd0";*/
-    char *baseDir = "/media/cimerspi4/WISPR_SD";
+/*char *baseDir = "/media/pi/wispr_sd0";*/
+char *baseDir = "/media/cimerspi4/WISPR_SD";
 #else
-    char *baseDir = "C:/Dave/sounds/PacWavePerimeterData/COPY_FOR_ERMA_TEST"; 
-/*      char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm";*/
+/*char *baseDir = "C:/Dave/sounds/PacWavePerimeterData/COPY_FOR_ERMA_TEST";*/ 
+/*char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm";*/
 /*char *baseDir = "C:/Dave/sounds/HI_Apr22_gliders/sperm/COPY_FOR_ERMA_TEST";*/
-/*char *baseDir = "C:/Dave/sounds/GoM_gliders_2017/resampledAt187kHz";*/
-/*char *baseDir = "C:\\Dave\\sounds\\fileFormatExamples\\WISPR\\3_byte_samples";*/
+char *baseDir = "C:/Dave/sounds/GoM_gliders_2017/resampledAt187kHz";
+/*char *baseDir = "C:/Dave/sounds/fileFormatExamples/WISPR/3_byte_samples";*/
 #endif
 
 
@@ -71,8 +71,9 @@ static ERMAPARAMS ep =
 #if ON_RPI
      "[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
 #else
-     "[0-9][0-9][0-9][0-9][0-9][0-9]/*.dat",
-     //"[0-9][0-9][0-9][0-9][0-9][0-9]/*.wav",
+     //These are in two pieces because slash-star messes up emacs un/commenting.
+/*     "[0-9][0-9][0-9][0-9][0-9][0-9]/" "*.dat",*/
+     "[0-9][0-9][0-9][0-9][0-9][0-9]/" "*.wav",
 #endif
 
      //outDir: where in the outDir directory to put the detection report files
@@ -151,7 +152,7 @@ static ERMAPARAMS ep =
      0.25,	//decayTime: exponential-decay constant for expdecay()
 /*     200,	//powerThresh: detection threshold per kHz in numerator band*/
 /*     50,	//powerThresh: detection threshold per kHz in numerator band*/
-     80,	//powerThresh: detection threshold per kHz in numerator band
+     100,	//powerThresh: detection threshold per kHz in numerator band
 /*     0.10,	//refractoryT: stop peaks w/in this after start of a click*/
      0.01,	//refractoryT: stop peaks w/in this after start of a click
      0.005,	//peakNbdT: peak is highest of anything within this time
@@ -175,7 +176,7 @@ static ERMAPARAMS ep =
      5, 	//consecBlocks: # consecutive blocks for counting hits
      3,		//hitsPerEnc: min number of block hits in the consecutive
 		//    blocks needed to register as an encounter */
-     1000, 	//clicksToSave: number of clicks to save per dive
+     2000, 	//clicksToSave: number of clicks to save per dive
      
      /* stuff for glider noise removal: */
 //    0.1,	*///ns_tBlockS: block duration for measuring noise, s
@@ -219,6 +220,7 @@ int main(int argc, char **argv)
     unsigned int pinval;
 
     printf("In main()\n");
+    printf("Looking for files in %s/%s\n", baseDir, ep.infilePattern);
     #if ON_RPI
     /* Set RPI_ACTIVE GPIO pin high to indicate I'm busy */
     gpio_export(ep.gpioRPiActive);		//make the pin accessible
@@ -239,6 +241,7 @@ int main(int argc, char **argv)
     #endif
 
     /* Initialization */
+    time_t startTime = time(NULL);
     initENCOUNTERS(&enc);
     initALLCLICKS(&allC);
     ERMACONFIG *ec = ermaReadConfigFile(baseDir, configFileName);
@@ -286,7 +289,7 @@ int main(int argc, char **argv)
 /*	for (i = 0; unprocessedFiles[i] != NULL && i < 1; i++) {  *//* DEBUG */
 /*	    printf("******* DEBUG: ErmaMain doing only a few **********\n");*/
 
-	    printf("#%d ErmaMain: processing %s\n", i, unprocessedFiles[i]);
+	    printf("#%d ErmaMain: processing %s\n", i+1, unprocessedFiles[i]);
 	    appendToProcessed(pathFile(unprocessedFiles[i]),filesProcessedPath);
 /*	    printf("******* DEBUG: not appending to files_processed.txt**\n");*/
 
@@ -302,13 +305,14 @@ int main(int argc, char **argv)
 	    }
 	    #endif
 	}
-	printf("Done processing files.\n");
+	printf("main(): Done processing files. Saving encounters.\n");
 
 	/* Find and save encounters. First check if WISPR needs a shutdown. */
 	if (!fastQuit) {
 	    findEncounters(&allC, &ep, &enc);
 	    saveEncounters(&enc, &allC, piEncDetsPath, wisprEncDetsPath,
-			   tMinE, tMaxE, encFileListPath, ep.clicksToSave);
+			   tMinE, tMaxE, encFileListPath, ep.clicksToSave,
+			   startTime);
 	    printf("Exiting normally.\n");
 	}
     }
@@ -317,8 +321,8 @@ int main(int argc, char **argv)
     /* Set the RPI_ACTIVE GPIO pin to low to indicate we're done and the RPi can
      * be shut off. */
     printf("ErmaMain: NOT CLEARING RPiActive GPIO PIN, NOT SHUTTING DOWN\n");
-/*    gpio_set_value(ep.gpioRPiActive, 0);	*//* set the pin low */
-/*    system("sudo shutdown -h now");		*//* would this work? */
+    gpio_set_value(ep.gpioRPiActive, 0);	/* set the pin low */
+    system("sudo shutdown -h now");		/* would this work? */
 #endif
 
     return 0;

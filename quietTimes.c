@@ -58,7 +58,7 @@ QUIETTIMES *findQuietTimes(float *snd, size_t nSamp, float sRate,
 	}
 	avgPower[i] = (float)(sum / (double)blockLen);
     }
-#if !ON_RPI    
+#ifdef DEBUG_NOISE_POWER
     printSignalToFile(avgPower, nBlocks, "temp-avgPower.csv");
 #endif
 

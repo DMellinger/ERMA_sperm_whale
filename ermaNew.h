@@ -25,10 +25,11 @@ void resetFILECLICKS(FILECLICKS *fc);
 void initALLCLICKS(ALLCLICKS *ac);
 void ermaSegments(float *snd, WISPRINFO *wi, ERMAPARAMS *ep, QUIETTIMES *qt,
 		  FILECLICKS *fc);
-void ermaNew(float *seg, int32_t nSam, float sRate, ERMAPARAMS *ep,
+void ermaNew(float *seg, int32_t nSam, float segT0, float sRate, ERMAPARAMS *ep,
 	     FILECLICKS *fc);
 void appendClicks(ALLCLICKS *ac, FILECLICKS *fc, double fileTime);
-void saveAllClicks(ALLCLICKS *allC, char *outPath, char *inPath);
+void saveNewClicks(ALLCLICKS *allC, int32 startN, double fileTimeE,
+		   char *outPath, char *inPath);
 
 
 #endif	/* _ERMANEW_H_ */

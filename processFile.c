@@ -67,15 +67,18 @@ void processFile(char *inPath, char *outPath, ERMAPARAMS *ep, ALLCLICKS *allC,
     /* Find the useful data spans */
     resetQuietTimes(&quietT);
     findQuietTimes(snd, wi.nSamp, wi.sRate, ep, &quietT, baseDir);
-/*    printf("processFile %s\n", inPath); printQuietTimes(&quietT);*//* DEBUG */
+    #ifdef PRINT_QUIET_TIMES
+    printQuietTimes(&quietT);		/* DEBUG */
+    #endif
 
     /* Run ERMA (in ermaNew.c), getting click times in this file in
      * fileC. Append these to allC as Epoch times. */
+    int32 startClickNo = allC->n;
     ermaSegments(snd, &wi, ep, &quietT, &fileC);
     appendClicks(allC, &fileC, wi.timeE);
 
     /* Save all detected clicks. */
-    saveAllClicks(allC, outPath, inPath);
+    saveNewClicks(allC, startClickNo, wi.timeE, outPath, inPath);
 
     wisprCleanup(&wi);
 }

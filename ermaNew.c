@@ -7,10 +7,11 @@ static void calcAverageRatio(float *num, float *den, int32 nNum,
 			     int32 avgSam, float *ratio, int32 *pNRatio,
 			     float *numAvg, float *denAvg);
 int32 peakNear(float *x, int32 nX, int32 ix, int32 nbdSam);
-void findClicks(float *x, int32 nX, float *ratio, int32 nRatio, float sRate,
-		ERMAPARAMS *ep, int32 delaySam, float bwNumer, FILECLICKS *fc);
-void writeFileClicks(FILECLICKS *fc, char *filename);
-void writeAllClicks(ALLCLICKS *ac, char *filename);
+void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
+		float sRate, ERMAPARAMS *ep, int32 delaySam, float bwNumer,
+		FILECLICKS *fc);
+void writeFILECLICKS(FILECLICKS *fc, char *filename);
+void writeALLCLICKS(ALLCLICKS *ac, char *filename);
 
 
 
@@ -54,7 +55,7 @@ void ermaSegments(float *snd, WISPRINFO *wi, ERMAPARAMS *ep, QUIETTIMES *qt,
     for (i = 0; i < qt->n; i++) {
 	i0 = qt->tSpan[i].sam0;
 	i1 = qt->tSpan[i].sam1;
-	ermaNew(&snd[i0], i1 - i0, wi->sRate, ep, fc);
+	ermaNew(&snd[i0], i1 - i0, qt->tSpan[i].tS.t0, wi->sRate, ep, fc);
     }
 }
 
@@ -62,7 +63,7 @@ void ermaSegments(float *snd, WISPRINFO *wi, ERMAPARAMS *ep, QUIETTIMES *qt,
 /* Run the ERMA process on a segment of snd for nSam samples. Results are left
  * in fc.
  */
-void ermaNew(float *seg, int32 nSam, float sRate, ERMAPARAMS *ep,
+void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
 	     FILECLICKS *fc)
 {
     static float *x = NULL;	/* the decimated signal */
@@ -141,7 +142,8 @@ void ermaNew(float *seg, int32 nSam, float sRate, ERMAPARAMS *ep,
 
     /* Find clicks - peaks in numer (which is normPowNumer) that also satisfy
      * the ERMA ratio test. Click detection times are put into fc. */
-    findClicks(numer, nX, ratio, nRatio, sRate, ep, delaySam, bwNumer, fc);
+    findClicks(numer, nX, segT0, ratio, nRatio, sRate, ep, delaySam, bwNumer,
+	       fc);
 }
 
 /*
@@ -257,8 +259,8 @@ static void calcAverageRatio(float *num, float *den, int32 nNum,
  * ratio at the peak is above another threshold. The peaks found are stored in
  * fc.
  */
-void findClicks(float *x, int32 nX, float *ratio, int32 nRatio, float sRate,
-		ERMAPARAMS *ep, int32 delaySam, float bwNumer,
+void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
+		float sRate, ERMAPARAMS *ep, int32 delaySam, float bwNumer,
 		FILECLICKS *fc)
 {
 #ifdef DEBUG_SAVE_NBDS
@@ -283,12 +285,16 @@ void findClicks(float *x, int32 nX, float *ratio, int32 nRatio, float sRate,
 		/* Find corresponding high point in ratio[]. */
 		int32 ixR = peakNear(ratio, nRatio, i - delaySam, nbdSam);
 #ifdef DEBUG_SAVE_NBDS
-		fprintf(fp, "%d,%d,%d,%d,%d\n", ixN, i - delaySam - nbdSam,
-			i-delaySam+nbdSam+1, ixR, ratio[ixR] > ep->ratioThresh);
+		int32 segIx0 = segT0 * sRate;
+		fprintf(fp, "%d,%d,%d,%d,%d\n", ixN + segIx0,
+			i - delaySam - nbdSam + segIx0,
+			i - delaySam + nbdSam + 1 + segIx0,
+			ixR + segIx0, ratio[ixR] > ep->ratioThresh);
 #endif
 		if (ratio[ixR] > ep->ratioThresh) {
+		    /* Found a click. Add it to fc. */
 		    BUFGROW(fc->timeS, fc->n + 1, ERMA_NO_MEMORY_PEAK);
-		    fc->timeS[fc->n] = (ixR + delaySam) / sRate;
+		    fc->timeS[fc->n] = (ixR + delaySam) / sRate + segT0;
 		    fc->n += 1;
 		    /* Advance i past this peak. Gets incremented below too. */
 		    i = MAX(i, ixR - delaySam);
@@ -306,7 +312,7 @@ void findClicks(float *x, int32 nX, float *ratio, int32 nRatio, float sRate,
 
 /* For debugging.
  */
-void writeFileClicks(FILECLICKS *fc, char *filename)
+void writeFILECLICKS(FILECLICKS *fc, char *filename)
 {
     FILE *fp = fopen(filename, "w");
     for (int32 i = 0; i < fc->n; i++)
@@ -317,7 +323,7 @@ void writeFileClicks(FILECLICKS *fc, char *filename)
 
 /* For debugging.
  */
-void writeAllClicks(ALLCLICKS *ac, char *filename)
+void writeALLCLICKS(ALLCLICKS *ac, char *filename)
 {
     FILE *fp = fopen(filename, "w");
     for (int32 i = 0; i < ac->n; i++) {
@@ -360,20 +366,23 @@ int32 peakNear(float *x, int32 nX, int32 ix, int32 nbd)
 }
 
 
-/* Save detections to outPath. A base time is written first as seconds since The
- * Epoch, then all detections are written as seconds since that base time.
+/* Save detections to outPath. A base time of the start of the file is written
+ * first as seconds since The Epoch, then all detections are written as seconds
+ * since that base time (since start of file).
  */
-void saveAllClicks(ALLCLICKS *allC, char *outPath, char *inPath)
+void saveNewClicks(ALLCLICKS *allC, int32 startN, double fileTimeE,
+		   char *outPath, char *inPath)
 {
     const double secPerDay = 24*60*60;
     FILE *fp = fopen(outPath, "a");
 
     if (fp != NULL) {
-	if (allC->n > 0) {
-	    double baseTime_D = allC->timeD[0];	//times are measured from this
+	if (allC->n > startN) {
+	    double baseTime_D = fileTimeE / secPerDay;
+/*	    double baseTime_D = allC->timeD[0];	//times are measured from this*/
 	    fprintf(fp, "$clickDet,%s,%.3lf",
 		    pathFile(inPath), baseTime_D * secPerDay);
-	    for (int32 i = 0; i < allC->n; i++) 
+	    for (int32 i = startN; i < allC->n; i++) 
 		fprintf(fp, ",%.3lf", (allC->timeD[i]- baseTime_D) * secPerDay);
 	    fprintf(fp, "\n");
 	}

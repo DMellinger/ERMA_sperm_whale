@@ -13,7 +13,10 @@
 # the ErmaMain line below, and to use the stub version put
 # processFileStub.o there.
 
-CFLAGS = -g
+# Choose one of these, the first for debugging, the second for speed:
+#CFLAGS = -g
+CFLAGS = -O2
+
 LDLIBS = -lm
 
 ErmaMain: ErmaMain.o processFile.o wisprFile.o wavFile.o ermaConfig.o \
@@ -26,7 +29,6 @@ ALLINCLUDES = encounters.h erma.h ermaConfig.h ermaErrors.h	\
 		ermaFilt.h ermaGoodies.h ermaNew.h expDecay.h	\
 		quietTimes.h gpio.h iirFilter.h processFile.h	\
 		wavFile.h wisprFile.h
-
 
 ErmaMain.o:	${ALLINCLUDES}
 wisprFile.o:	${ALLINCLUDES}
