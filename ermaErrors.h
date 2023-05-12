@@ -33,5 +33,6 @@
 #define ERMA_NO_MEMORY_NUMER_DENOM_AVG	27	/* ermaNew.c */
 #define ERMA_NO_MEMORY_READFLOATS	28	/* ermaGoodies.c */
 #define ERMA_NO_MEMORY_GETTHRESH	29	/* quietTimes.c */
+#define CANT_DO_WINDOW_TYPE		30	/* fft.c */
 
 #endif	/* _ERMAERRORS_H */

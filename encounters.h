@@ -15,6 +15,7 @@ void initENCOUNTERS(ENCOUNTERS *enc);
 void findEncounters(ALLCLICKS *allClicks, ERMAPARAMS *ep, ENCOUNTERS *enc);
 void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *piEncDetsPath,
 		    char *wisprEncDetsPath, double tMinE, double tMaxE,
-		    char *encFileListPath, int32 clicksToSave);
+		    char *encFileListPath, int32 clicksToSave,
+		    time_t startTime);
 
 #endif /* _ENCOUNTERS_H_ */

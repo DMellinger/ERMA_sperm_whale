@@ -168,6 +168,7 @@ void gatherErmaParams(ERMACONFIG *ec, ERMAPARAMS *ep)
     ermaGetFloat(ec, "ratioThresh",	&ep->ratioThresh);
     ermaGetFloat(ec, "ignoreThresh",	&ep->ignoreThresh);
     ermaGetFloat(ec, "ignoreLimT",	&ep->ignoreLimT);
+    ermaGetFloat(ec, "specLenS",	&ep->specLenS);
 
     /* stuff for testClickDets: */
     ermaGetFloat(ec, "minRate",		&ep->minRate);

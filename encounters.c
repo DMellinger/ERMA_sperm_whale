@@ -196,20 +196,21 @@ end
  */
 void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *piEncDetsPath,
 		    char *wisprEncDetsPath, double tMinE, double tMaxE,
-		    char *encFileListPath, int32 clicksToSave)
+		    char *encFileListPath, int32 clicksToSave,
+		    time_t startTime)
 {
     FILE *fp = fopen(piEncDetsPath, "a");
     const double secPerDay = 24 * 60 * 60;
 
-    /* Add up the duration of all encounters. */
-    double totalDur = 0.0;
-    for (int32 i = 0; i < enc->n; i++)
-	totalDur += TIMESPAN_DUR(enc->tSpanD[i]);
+    printf("saveEncounters: %d encounter(s)\n", enc->n);
 
-/*    printf("saveEncounters: %d encounters\n", enc->n);*/
     if (fp != NULL) {
+	/* Add up the duration of all encounters. */
+	double totalDur = 0.0;
+	for (int32 i = 0; i < enc->n; i++)
+	    totalDur += TIMESPAN_DUR(enc->tSpanD[i]);
+
 	/* Record the start and stop of processing */
-/*	time_t t0 = (time_t)floor(tMinE), t1 = (time_t)floor(tMaxE);*/
 	char buf0[20], buf1[20];
 	fprintf(fp, "$analyzed,%s,%s\n",
 		(tMaxE < 0) ? "0" : timeStrE(buf0, (time_t)floor(tMinE)),
@@ -233,6 +234,8 @@ void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *piEncDetsPath,
 		    i1 = j;
 		}
 	    }
+	    fprintf(fp, ",%d", i1 - i0);	//write number of clicks
+
 	    //Save the clicks in the MIDDLE of the encounter, since those might
 	    //be the loudest and thus most representative of the encounter.
 	    int32 cMid = (i0 + i1)/2;
@@ -241,7 +244,8 @@ void saveEncounters(ENCOUNTERS *enc, ALLCLICKS *allC, char *piEncDetsPath,
 	    for (int32 ci = c0; ci < c1; ci++)
 		fprintf(fp, ",%.3lf", (allC->timeD[ci] - t0D) * secPerDay);
 	    fprintf(fp, "\n");
-	} //for (i...)
+	}   //for i
+	fprintf(fp, "$processtimesec,%ld\n", time(NULL) - startTime);
 	fclose(fp);
     } //if (fp != NULL)
 

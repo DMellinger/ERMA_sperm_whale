@@ -59,7 +59,8 @@ typedef struct
     float ratioThresh;	//minimum ERMA ratio (linear, not dB)
     float ignoreThresh;	//sams this loud don't affect running mean
     float ignoreLimT;	//...unless they last for this long
-    
+    float specLenS;	//time window for calculating averaged click spectra
+
     /* stuff for testClickDets: */
     float minRate;	//min req'd click period over whole file, s
     float iciRange[2];	//range of valid inter-click intervals

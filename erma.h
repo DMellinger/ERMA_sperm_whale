@@ -52,6 +52,9 @@
 //Save the click neighborhoods in temp-ratioNbds.csv.
 #define DEBUG_SAVE_NBDS
 
+//Save the click spectra. Overwrites output file on every click.
+#define DEBUG_SAVE_SPECTRA
+
 //Print out the quiet times in the file.
 #define PRINT_QUIET_TIMES
 
@@ -61,6 +64,12 @@
 #endif	//if ON_RPI
 /**********************************************************************/
 
+
+/* These are the GPIO pin numbers used by this system. See the comment in
+ * ErmaMain.c for an explanation.
+ */
+#define WISPR_ACTIVE_GPIO_PIN	6
+#define RPI_ACTIVE_GPIO_PIN	12
 
 
 /* A TIMESPAN holds start- and end-times of something. The values can be any of
@@ -87,6 +96,7 @@ typedef union {
 
 /* The #includes for the ERMA project: */
 #include "gpio.h"
+#include "fft.h"
 #include "ermaGoodies.h"
 #include "wisprFile.h"
 #include "wavFile.h"

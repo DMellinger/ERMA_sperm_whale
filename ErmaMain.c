@@ -73,7 +73,8 @@ static ERMAPARAMS ep =
 #else
      //These are in two pieces because slash-star messes up emacs un/commenting.
 /*     "[0-9][0-9][0-9][0-9][0-9][0-9]/" "*.dat",*/
-     "[0-9][0-9][0-9][0-9][0-9][0-9]/" "*.wav",
+/*     "[0-9][0-9][0-9][0-9][0-9][0-9]/" "*.wav",*/
+     "170610/*.wav",
 #endif
 
      //outDir: where in the outDir directory to put the detection report files
@@ -138,8 +139,8 @@ static ERMAPARAMS ep =
       * the RPi is busy processing; when it goes low, the RPi is shutting down
       * and WISPR should wait a few seconds and power off the RPi.
       */
-     6,		//gpioWisprActive: input pin # to tell RPi to process files
-     12,	//gpioRPiActive: output pin # to tell WISPR that RPi is busy
+     WISPR_ACTIVE_GPIO_PIN, //gpioWisprActive: input pin, tells RPi to start
+     RPI_ACTIVE_GPIO_PIN,   //gpioRPiActive: output pin, tells WISPR RPi is busy
 
      /* Stuff for filtering. NB: These filter params differ from other params
       * below in that their default values aren't here but are in ermaFilt.c */
@@ -163,6 +164,7 @@ static ERMAPARAMS ep =
 /*     50,	//ignoreThresh: sams this loud don't affect running mean*/
      1e7,	//ignoreThresh: sams this loud don't affect running mean
      0.1,	//ignoreLimT: ...unless they last for this long
+     0.010,	//specLenS: time window for calculating averaged click spectra
      
      /* stuff for testClickDets: */
      40,	//minRate: min required click period over whole file, s
@@ -176,7 +178,7 @@ static ERMAPARAMS ep =
      5, 	//consecBlocks: # consecutive blocks for counting hits
      3,		//hitsPerEnc: min number of block hits in the consecutive
 		//    blocks needed to register as an encounter */
-     2000, 	//clicksToSave: number of clicks to save per dive
+     1000, 	//clicksToSave: number of clicks to save per dive
      
      /* stuff for glider noise removal: */
 //    0.1,	*///ns_tBlockS: block duration for measuring noise, s
@@ -219,7 +221,8 @@ int main(int argc, char **argv)
     char filesProcessedPath[256];	//full path for filesProcessed
     unsigned int pinval;
 
-    printf("In main()\n");
+    printf("In ErmaMain.c/main()\n");
+    
     printf("Looking for files in %s/%s\n", baseDir, ep.infilePattern);
     #if ON_RPI
     /* Set RPI_ACTIVE GPIO pin high to indicate I'm busy */
@@ -320,9 +323,11 @@ int main(int argc, char **argv)
 #if ON_RPI
     /* Set the RPI_ACTIVE GPIO pin to low to indicate we're done and the RPi can
      * be shut off. */
-    printf("ErmaMain: NOT CLEARING RPiActive GPIO PIN, NOT SHUTTING DOWN\n");
+/*   printf("ErmaMain: NOT CLEARING RPiActive GPIO PIN, NOT SHUTTING DOWN\n");*/
+    printf("SHUTTING DOWN IN 5 SECONDS.\n");
+    sleep(5);
     gpio_set_value(ep.gpioRPiActive, 0);	/* set the pin low */
-    system("sudo shutdown -h now");		/* would this work? */
+    system("sudo shutdown -h now");
 #endif
 
     return 0;

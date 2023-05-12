@@ -9,7 +9,9 @@ static void calcAverageRatio(float *num, float *den, int32 nNum,
 int32 peakNear(float *x, int32 nX, int32 ix, int32 nbdSam);
 void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
 		float sRate, ERMAPARAMS *ep, int32 delaySam, float bwNumer,
-		FILECLICKS *fc);
+		FILECLICKS *fc, float *seg, size_t nSeg, float segSRate);
+void addSpec(CLICKSPEC cs, float t, float *seg, size_t nSeg,
+	     float sRate, size_t nSpecSams, float *win);
 void writeFILECLICKS(FILECLICKS *fc, char *filename);
 void writeALLCLICKS(ALLCLICKS *ac, char *filename);
 
@@ -60,10 +62,10 @@ void ermaSegments(float *snd, WISPRINFO *wi, ERMAPARAMS *ep, QUIETTIMES *qt,
 }
 
 
-/* Run the ERMA process on a segment of snd for nSam samples. Results are left
- * in fc.
+/* Run the ERMA process on a segment of snd for nSam samples. Results (click
+ * detections) are left in fc.
  */
-void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
+void ermaNew(float *seg, int32 nSeg, float segT0, float sRate, ERMAPARAMS *ep,
 	     FILECLICKS *fc)
 {
     static float *x = NULL;	/* the decimated signal */
@@ -72,9 +74,10 @@ void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
     float bwNumer, bwDenom, newSRate;
 
     /* Decimate the signal. x ends up 1/ep->decim as long as seg, but during
-     * filtering it needs to be as long as seg, so nSam is used here. */
-    BUFGROW(x, nSam, ERMA_NO_MEMORY_DECIMBUF);
-    ermaDownsample(seg, nSam, ep->decim, x, &nX, sRate, &newSRate);
+     * filtering it needs to be as long as seg, so nSeg is used here. */
+    BUFGROW(x, nSeg, ERMA_NO_MEMORY_DECIMBUF);
+    float origSRate = sRate;
+    ermaDownsample(seg, nSeg, ep->decim, x, &nX, sRate, &newSRate);
     sRate = newSRate;
 
     /* Do the ERMA filtering: calculate the numerator signal, the denominator
@@ -86,11 +89,16 @@ void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
     BUFGROW(ratio, nX, ERMA_NO_MEMORY_NUMER_DENOM);
     ermaNumerDenomFilt(x, nX, numer, denom); //numer, denom same length as x
 
-/*    printf("ermaNew: writing temp signal file(s)\n");*/
-/*    writeFloatArray(x, nX, "temp.flt");*/
-/*    writeShortFromFloat(x, nX, "tempY-downSampled.b600");*/
-/*    writeFloatArray(numer, nX, "temp-numer.flt");*/
-/*    writeFloatArray(denom, nX, "temp-denom.flt");*/
+#ifdef DEBUG_SAVE_ARRAYS
+    printf("ermaNew: writing temp signal files\n");
+    writeFloatArray(seg, nSeg, "temp-x.flt");
+    writeFloatArray(x, nX, "tempY-downSampled.flt");
+    char fname[256];
+    sprintf(fname, "tempY-downSampled.b%d", (long)round(sRate / 100));
+    writeShortFromFloat(x, nX, fname);
+    writeFloatArray(numer, nX, "temp-numer.flt");
+    writeFloatArray(denom, nX, "temp-denom.flt");
+#endif
 
     ermaFiltGetBandwidths(&bwNumer, &bwDenom);
     bwNumer /= 1000.0;		/* make Hz into kHz */
@@ -122,7 +130,7 @@ void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
     int32 delaySam = avgSam / 2;
 
 #ifdef DEBUG_SAVE_ARRAYS
-    printf("ermaNew: printing temp files\n");
+    printf("ermaNew: writing temp files starting at %.5f s\n", segT0);
     writeFloatArray(numer,  nX, "temp-numerPow.flt");
     writeFloatArray(denom,  nX, "temp-denomPow.flt");
     writeFloatArray(ratio,  nX, "temp-ratio.flt");
@@ -137,13 +145,15 @@ void ermaNew(float *seg, int32 nSam, float segT0, float sRate, ERMAPARAMS *ep,
 	     ep->ignoreThresh / bwNumer, ep->ignoreLimT, 1);
 
 #ifdef DEBUG_SAVE_ARRAYS
+    //Same normPowNumer (here in numer).
     writeFloatArray(numer, nX, "temp-normPowNumer.flt");
 #endif
 
     /* Find clicks - peaks in numer (which is normPowNumer) that also satisfy
      * the ERMA ratio test. Click detection times are put into fc. */
+    int32 startClickNo = fc->n;
     findClicks(numer, nX, segT0, ratio, nRatio, sRate, ep, delaySam, bwNumer,
-	       fc);
+	       fc, seg, nSeg, origSRate);
 }
 
 /*
@@ -257,11 +267,12 @@ static void calcAverageRatio(float *num, float *den, int32 nNum,
  * within refractorySam samples that are above peak, (c) the location of the
  * peak is adjusted to the highest value within nbdSam samples, and (d) the
  * ratio at the peak is above another threshold. The peaks found are stored in
- * fc.
+ * fc along with their spectra. seg is the original signal, which is used only
+ * for calculating spectra.
  */
 void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
 		float sRate, ERMAPARAMS *ep, int32 delaySam, float bwNumer,
-		FILECLICKS *fc)
+		FILECLICKS *fc, float *seg, size_t nSeg, float segSRate)
 {
 #ifdef DEBUG_SAVE_NBDS
     printf("findClicks: printing click nbds to file\n");
@@ -272,6 +283,16 @@ void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
     int32 nbdSam = round(ep->peakNbdT * sRate);
     int32 refractorySam = round(ep->refractoryT * sRate);
     float powerThreshPerKHz = ep->powerThresh / bwNumer;
+    size_t nSpecSams = (size_t)round(ep->specLenS * sRate / SPECLEN) * SPECLEN;
+
+    //Set up Hanning window if needed.
+    static float win[NFFT];
+    static int winInitted = 0;
+    if (!winInitted) {
+	fftMakeWindow(win, WIN_HANNING, NFFT, 0);
+	winInitted = 1;
+    }
+    
     int32 nLow = 0;
     int32 i = 0;
     while (i < nRatio) {	//i can get changed inside the loop
@@ -294,7 +315,10 @@ void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
 		if (ratio[ixR] > ep->ratioThresh) {
 		    /* Found a click. Add it to fc. */
 		    BUFGROW(fc->timeS, fc->n + 1, ERMA_NO_MEMORY_PEAK);
+/*		    BUFGROW(fc->spec, fc->n + 1, ERMA_NO_MEMORY_PEAK);*/
 		    fc->timeS[fc->n] = (ixR + delaySam) / sRate + segT0;
+/*		    addSpec(fc->spec[fc->n], (float)ixN/sRate, seg, nSeg,*/
+/*			    segSRate, nSpecSams, win);*/
 		    fc->n += 1;
 		    /* Advance i past this peak. Gets incremented below too. */
 		    i = MAX(i, ixR - delaySam);
@@ -306,6 +330,65 @@ void findClicks(float *x, int32 nX, float segT0, float *ratio, int32 nRatio,
     }
 #ifdef DEBUG_SAVE_NBDS
     fclose(fp);
+#endif
+}
+
+
+/* Put a spectrum taken from the original signal seg in cs. The spectrum is
+ * calculated for a series of sound segments of length NFFT; their power is
+ * summed and then divided by the number of spectra to get the average power
+ * spectrum for this click.
+ */
+void addSpec(CLICKSPEC cs, float t, float *seg, size_t nSeg,
+	     float sRate, size_t nSpecSams, float *win)
+{
+    size_t ix = (size_t)round(t * sRate);
+    size_t ix0 = ix - nSpecSams/2;
+    size_t ix1 = ix + (nSpecSams + 1)/2;
+    float xRe[NFFT], xIm[NFFT];
+    float sumSpec[SPECLEN];
+
+    //Take care of endpoints.
+    if (ix0 < 0) {
+	ix1 -= ix0;
+	ix0 = 0;
+    }
+    if (ix1 > nSeg) {
+	ix0 -= ix1 - nSeg;
+	ix1 = nSeg;
+    }
+    if (ix0 < 0)
+	ix0 = 0;
+    
+    //Prepare sumSpec, which has the summed power spectra.
+    int32 nSumSpec = 0;	//number of spectra that get summed
+    for (int32 j = 0; j < SPECLEN; j++)
+	sumSpec[j] = 0.0;
+
+    for (size_t i = ix0; i + NFFT < ix1; i += SPECLEN) {
+	//Set up real and imaginary arrays. The latter starts off 0.
+	memcpy(xRe, &seg[i], NFFT * sizeof(xRe[0]));
+	for (int32 j = 0; j < NFFT; j++)
+	    xIm[j] = 0.0;
+	//Window the real part.
+	for (int32 j = 0; j < NFFT; j++)
+	    xRe[j] *= win[j];
+
+	//Calculate spectrum. It ends up in upper half, reversed.
+	fft(xRe, xIm, FFTM);
+
+	//Add summed power to sumSpec.
+	nSumSpec++;
+	for (int32 jSrc = SPECLEN, jDst = 0; jSrc < NFFT; jSrc++, jDst++)
+	    sumSpec[jDst] += xRe[jSrc]*xRe[jSrc] + xIm[jSrc]*xIm[jSrc];
+    }
+    //Put average power in output (cs). Also reverse sumSpec to get low
+    //frequencies first.
+    for (int32 j = 0, k = SPECLEN-1; j < SPECLEN; j++, k--)
+	cs[j] = sumSpec[k] / nSumSpec;
+
+#ifdef DEBUG_SAVE_SPECTRA
+    writeFloatArray(cs, SPECLEN, "temp-clickSpectrum.flt");
 #endif
 }
 
